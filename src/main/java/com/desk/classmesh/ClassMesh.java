@@ -7,8 +7,6 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import java.util.List;
-import java.util.ArrayList;
 
 import javafx.scene.image.Image;
 import javafx.scene.layout.GridPane;
@@ -22,6 +20,7 @@ public class ClassMesh extends Application {
     Label tCountTitle;
     ComboBox<Integer> teachCount;
     GridPane mapSubs;
+
     @Override
     public void start(Stage stage){
         VBox root = new VBox();
@@ -111,8 +110,7 @@ public class ClassMesh extends Application {
                             errorMessage = "Please select subject count for each semester.";
                             break;
                         }
-                    } else if (node instanceof GridPane) {
-                        GridPane subNameGrid = (GridPane) node;
+                    } else if (node instanceof GridPane subNameGrid) {
                         for (Node subNode : subNameGrid.getChildren()) {
                             if (subNode instanceof TextField) {
                                 TextField subName = (TextField) subNode;
@@ -209,7 +207,6 @@ public class ClassMesh extends Application {
 
 
 
-
         });
 
 
@@ -265,7 +262,8 @@ public class ClassMesh extends Application {
 
         });
 
-        //adding scrollpane to tabpane
+
+        //adding scrollable to tab pane
         TabPane myTabPane = new TabPane();
 
 
@@ -295,7 +293,7 @@ public class ClassMesh extends Application {
 
 
 
-        Scene scene = new Scene(myTabPane, 1080, 720); // Set scene with tabpane content
+        Scene scene = new Scene(myTabPane, 1080, 720); // Set scene with tab pane content
         root.getChildren().addAll(titleLabel,semCount,gridTitle,subGrid,tCountTitle,teachCount,mapTitle,mapSubs);
         Image icon = new Image("icon.png");
         stage.getIcons().add(icon);
