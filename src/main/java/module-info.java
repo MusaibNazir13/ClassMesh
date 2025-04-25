@@ -4,6 +4,10 @@ module com.desk.classmesh {
     requires java.desktop;
     requires com.fasterxml.jackson.databind;
     requires com.fasterxml.jackson.datatype.jsr310;
+    requires org.apache.poi.ooxml;
+    requires kernel;
+    requires layout;
+    requires io;
 
 
     opens com.desk.classmesh to javafx.fxml;
