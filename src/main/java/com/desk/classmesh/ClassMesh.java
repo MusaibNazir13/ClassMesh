@@ -14,8 +14,10 @@ import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color; // Import Color
+import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.FileChooser; // Import FileChooser
@@ -100,6 +102,12 @@ record TimeConfiguration(String workStart, String workEnd, String breakStart, St
 
 
 public class ClassMesh extends Application {
+    //About Section Constants
+    private static final String APP_NAME = "ClassMesh";
+    private static final String APP_VERSION = "1.2.0";
+    private static final String DEVELOPER_NAME = "Musaib Nazir";
+    private static final String DEVELOPER_EMAIL = "grmusa9797@gmail.com";
+    private static final String DEVELOPER_CONTACT = "+91-9541757976";
     // --- Constants ---
     private static final String MAIN_CONTAINER_STYLE_CLASS = "main-config-pane";
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
@@ -178,8 +186,25 @@ public class ClassMesh extends Application {
 
     /** Creates the Menu Bar */
     private MenuBar createMenuBar(Stage stage) {
-        MenuBar menuBar = new MenuBar(); Menu fileMenu = new Menu("File"); MenuItem loadItem = new MenuItem("Load Configuration"); MenuItem saveItem = new MenuItem("Save Configuration");
-        loadItem.setOnAction(e -> handleLoadConfiguration(stage)); saveItem.setOnAction(e -> handleSaveConfiguration(stage)); fileMenu.getItems().addAll(loadItem, saveItem); menuBar.getMenus().add(fileMenu);
+        MenuBar menuBar = new MenuBar();
+
+        // --- File Menu (Existing) ---
+        Menu fileMenu = new Menu("File");
+        MenuItem loadItem = new MenuItem("Load Configuration");
+        MenuItem saveItem = new MenuItem("Save Configuration");
+        loadItem.setOnAction(e -> handleLoadConfiguration(stage));
+        saveItem.setOnAction(e -> handleSaveConfiguration(stage));
+        fileMenu.getItems().addAll(loadItem, saveItem);
+
+        // --- Help Menu (New) ---
+        Menu helpMenu = new Menu("Help");
+        MenuItem aboutItem = new MenuItem("About " + APP_NAME);
+        aboutItem.setOnAction(e -> showAboutDialog()); // Call new method
+        helpMenu.getItems().add(aboutItem);
+
+        // --- Add Menus to Bar ---
+        menuBar.getMenus().addAll(fileMenu, helpMenu); // Add both menus
+
         return menuBar;
     }
 
@@ -1235,6 +1260,82 @@ public class ClassMesh extends Application {
         } // End day loop
 
         return table;
+    }
+    /**
+     * Displays the About dialog box, including a round/circular application logo.
+     */
+    private void showAboutDialog() {
+        Alert aboutAlert = new Alert(Alert.AlertType.INFORMATION);
+        aboutAlert.setTitle("About " + APP_NAME);
+        aboutAlert.setHeaderText(APP_NAME + " - Version " + APP_VERSION);
+
+        ImageView logoView = null;
+        double fitSize = 80.0; // Define the desired diameter for the circular logo
+
+        try (InputStream logoStream = getClass().getResourceAsStream("/logo.png")) { // Adjust filename if needed
+            if (logoStream != null) {
+                Image logoImage = new Image(logoStream);
+                logoView = new ImageView(logoImage);
+                // Set both fitWidth and fitHeight to the same value for a square aspect ratio before clipping
+                logoView.setFitWidth(fitSize);
+                logoView.setFitHeight(fitSize);
+                // Note: setPreserveRatio(true) might conflict if original image isn't square and you set both width/height.
+                // We'll control aspect via fitWidth/fitHeight being equal for the circular clip.
+                // logoView.setPreserveRatio(true); // Can be commented out or removed when setting both dimensions
+                logoView.setSmooth(true);
+
+                // --- Create and Apply Circular Clip ---
+                double radius = fitSize / 2.0;
+                Circle clip = new Circle(radius);
+                // Set the center of the circle to be the center of the ImageView's defined size
+                clip.setCenterX(radius);
+                clip.setCenterY(radius);
+                logoView.setClip(clip);
+                // --- End Circular Clip ---
+
+            } else {
+                System.err.println("Warning: logo.png not found in classpath root.");
+            }
+        } catch (Exception e) {
+            System.err.println("Error loading logo image: " + e.getMessage());
+        }
+
+
+        String contentText = String.format(
+                        "%s Version: %s\n\n" +
+                        "Developed by: %s\n" +
+                        "Mail: %s\n" +
+                        "Contact: %s\n\n" +
+                        "This application helps generate class timetables automatically without teacher conflictions.\n\n" ,
+                APP_NAME, APP_VERSION,
+                DEVELOPER_NAME,
+                DEVELOPER_EMAIL,
+                DEVELOPER_CONTACT
+        );
+
+        Label contentLabel = new Label(contentText);
+        contentLabel.setWrapText(true);
+        contentLabel.setPadding(new Insets(10, 0, 0, 0));
+
+        // Create Layout for Dialog Content (same as before)
+        VBox dialogLayout = new VBox(10);
+        dialogLayout.setAlignment(Pos.CENTER);
+        dialogLayout.setPadding(new Insets(10));
+
+        if (logoView != null) {
+            dialogLayout.getChildren().add(logoView);
+        }
+        dialogLayout.getChildren().add(contentLabel);
+
+        // Set the custom layout as the content (same as before)
+        aboutAlert.getDialogPane().setContent(dialogLayout);
+        aboutAlert.getDialogPane().setPrefWidth(400);
+
+        // Set Icon for the Dialog Window (same as before)
+        Stage alertStage = (Stage) aboutAlert.getDialogPane().getScene().getWindow();
+        loadStageIcon(alertStage);
+
+        aboutAlert.showAndWait();
     }
     // --- Manual JSON Conversion Helpers ---
     private String convertMapToJson(Map<String, Object> map) { return convertMapToJson(map, 1); }
