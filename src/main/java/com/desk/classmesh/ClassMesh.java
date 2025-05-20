@@ -1,10 +1,20 @@
-//Ver 1.2
+//Ver 1.3
 package com.desk.classmesh; // Make sure this matches your project structure
 
 // JavaFX Imports
 import javafx.application.Application;
 import javafx.application.Platform;
-import javafx.beans.value.ChangeListener;
+
+//mac-address imports
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.Collections;
+import java.util.Enumeration;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import java.util.Optional;
+
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -47,67 +57,239 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 // Java Standard Library Imports
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
-// --- External Library Imports (Add these to your project dependencies!) ---
+import java.util.stream.Collectors;
 
 // Apache POI (for Excel Export)
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.usermodel.Cell; // Explicit import for Cell
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.ss.util.CellRangeAddress; // For merging cells
-import org.apache.poi.xssf.usermodel.XSSFFont; // For specific font styling
 
-// Removed Apache PDFBox imports
 
 import static org.apache.poi.ss.usermodel.VerticalAlignment.CENTER;
 
 // --- End External Library Imports ---
 
 
-// --- Data Model Classes ---
-// (Data models unchanged)
-class Subject { String name; int weeklyHours; public Subject(String name, int hours) { this.name = name; this.weeklyHours = hours; } public String getName() { return name; } public int getWeeklyHours() { return weeklyHours; } @Override public String toString() { return name; } @Override public boolean equals(Object o) { if (this == o) return true; if (o == null || getClass() != o.getClass()) return false; Subject subject = (Subject) o; return weeklyHours == subject.weeklyHours && Objects.equals(name, subject.name); } @Override public int hashCode() { return Objects.hash(name, weeklyHours); } }
-class Semester { String name; List<Subject> subjects = new ArrayList<>(); public Semester(String name) { this.name = name; } public String getName() { return name; } public List<Subject> getSubjects() { return subjects; } @Override public String toString() { return name; } @Override public boolean equals(Object o) { if (this == o) return true; if (o == null || getClass() != o.getClass()) return false; Semester semester = (Semester) o; return Objects.equals(name, semester.name); } @Override public int hashCode() { return Objects.hash(name); } }
-class Teacher { String name; List<Subject> subjectsTaught = new ArrayList<>(); public Teacher(String name) { this.name = name; } public String getName() { return name; } public List<Subject> getSubjectsTaught() { return subjectsTaught; } public boolean canTeach(Subject subject) { return subjectsTaught.stream().anyMatch(taughtSub -> taughtSub.equals(subject)); } @Override public String toString() { return name; } @Override public boolean equals(Object o) { if (this == o) return true; if (o == null || getClass() != o.getClass()) return false; Teacher teacher = (Teacher) o; return Objects.equals(name, teacher.name); } @Override public int hashCode() { return Objects.hash(name); } }
-class SubjectContext { private final Subject subject; private final Semester semester; public SubjectContext(Subject subject, Semester semester) { this.subject = subject; this.semester = semester; } public Subject getSubject() { return subject; } public Semester getSemester() { return semester; } public String getUniqueId() { return subject.getName() + "|" + semester.getName(); } @Override public String toString() { return subject.getName() + " (" + semester.getName() + ")"; } @Override public boolean equals(Object o) { if (this == o) return true; if (o == null || getClass() != o.getClass()) return false; SubjectContext that = (SubjectContext) o; return Objects.equals(subject, that.subject) && Objects.equals(semester, that.semester); } @Override public int hashCode() { return Objects.hash(subject, semester); } }
-class TimetableEntry { String day; LocalTime startTime; LocalTime endTime; Semester semester; Subject subject; Teacher teacher; public TimetableEntry(String day, LocalTime startTime, LocalTime endTime, Semester semester, Subject subject, Teacher teacher) { this.day = day; this.startTime = startTime; this.endTime = endTime; this.semester = semester; this.subject = subject; this.teacher = teacher; } public String getDay() { return day; } public LocalTime getStartTime() { return startTime; } public LocalTime getEndTime() { return endTime; } public Semester getSemester() { return semester; } public Subject getSubject() { return subject; } public Teacher getTeacher() { return teacher; } public String getTimeSlotString() { DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm"); return startTime.format(formatter) + " - " + endTime.format(formatter); } }
+// ---Start of Data Model Classes ---
+
+//SubjectObject
+class Subject {
+    String name;
+    int weeklyHours;
+    public Subject(String name, int hours) {
+        this.name = name;
+        this.weeklyHours = hours;
+    }
+    public String getName() {
+        return name;
+    }
+    public int getWeeklyHours() {
+        return weeklyHours;
+    }
+    @Override
+    public String toString() {
+        return name;
+    }
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Subject subject = (Subject) o;
+        return weeklyHours == subject.weeklyHours && Objects.equals(name, subject.name);
+    }
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, weeklyHours);
+    }
+}
+//semester object
+class Semester {
+    String name;
+    List<Subject> subjects = new ArrayList<>();
+    public Semester(String name) {
+        this.name = name;
+    }
+    public String getName() {
+        return name;
+    }
+    public List<Subject> getSubjects() {
+        return subjects;
+    }
+    @Override
+    public String toString() {
+        return name;
+    }
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Semester semester = (Semester) o;
+        return Objects.equals(name, semester.name);
+    }
+    @Override
+    public int hashCode() {
+        return Objects.hash(name);
+    }
+}
+//Teacher Object
+class Teacher {
+    String name;
+    List<Subject> subjectsTaught = new ArrayList<>();
+    public Teacher(String name) {
+        this.name = name;
+    }
+    public String getName() {
+        return name;
+    }
+    public List<Subject> getSubjectsTaught() {
+        return subjectsTaught;
+    }
+//    public boolean canTeach(Subject subject) {
+//        return subjectsTaught.stream().anyMatch(taughtSub -> taughtSub.equals(subject));
+//    }
+    @Override
+    public String toString() {
+        return name;
+    }
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Teacher teacher = (Teacher) o;
+        return Objects.equals(name, teacher.name);
+    }
+    @Override
+    public int hashCode() {
+        return Objects.hash(name);
+    }
+}
+//SubjectContextObject
+class SubjectContext {
+    private final Subject subject;
+    private final Semester semester;
+    public SubjectContext(Subject subject, Semester semester) {
+        this.subject = subject;
+        this.semester = semester;
+    }
+    public Subject getSubject() {
+        return subject;
+    }
+    public Semester getSemester() {
+        return semester;
+    }
+
+    @Override
+    public String toString() {
+        return subject.getName() + " (" + semester.getName() + ")";
+    }
+    @Override
+    public boolean equals(Object o) { if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        SubjectContext that = (SubjectContext) o;
+        return Objects.equals(subject, that.subject) && Objects.equals(semester, that.semester);
+    }
+    @Override
+    public int hashCode() {
+        return Objects.hash(subject, semester);
+    }
+}
+//TimeTableEntryObject
+class TimetableEntry {
+    String day;
+    LocalTime startTime;
+    LocalTime endTime;
+    Semester semester;
+    Subject subject;
+    Teacher teacher;
+    public TimetableEntry(String day, LocalTime startTime, LocalTime endTime, Semester semester, Subject subject, Teacher teacher) {
+        this.day = day;
+        this.startTime = startTime;
+        this.endTime = endTime;
+        this.semester = semester;
+        this.subject = subject;
+        this.teacher = teacher;
+    }
+    public String getDay() {
+        return day;
+    }
+    public LocalTime getStartTime() {
+        return startTime;
+    }
+
+    public Semester getSemester() {
+        return semester;
+    }
+    public Subject getSubject() {
+        return subject;
+    }
+    public Teacher getTeacher() {
+        return teacher;
+    }
+}
 // --- End Data Model Classes ---
 
-// --- Data Structures for Save Simulation ---
-record SubjectDetail(String name, int hours) { public Map<String, Object> toMap() { Map<String, Object> map = new LinkedHashMap<>(); map.put("name", name); map.put("hours", hours); return map; } }
-record SemesterConfig(String name, List<SubjectDetail> subjects) { public Map<String, Object> toMap() { Map<String, Object> map = new LinkedHashMap<>(); map.put("name", name); map.put("subjects", subjects.stream().map(SubjectDetail::toMap).collect(Collectors.toList())); return map; } }
-record TeacherAssignment(String subjectName, String semesterName) { public Map<String, Object> toMap() { Map<String, Object> map = new LinkedHashMap<>(); map.put("subjectName", subjectName); map.put("semesterName", semesterName); return map; } }
-record TeacherConfig(String name, List<TeacherAssignment> assignedSubjects) { public Map<String, Object> toMap() { Map<String, Object> map = new LinkedHashMap<>(); map.put("name", name); map.put("assignedSubjects", assignedSubjects.stream().map(TeacherAssignment::toMap).collect(Collectors.toList())); return map; } }
-record TimeConfiguration(String workStart, String workEnd, String breakStart, String breakEnd, int slotDuration, int maxTeacherSlots) { // Added maxTeacherSlots
-    public Map<String, Object> toMap() { Map<String, Object> map = new LinkedHashMap<>(); map.put("workStart", workStart); map.put("workEnd", workEnd); map.put("breakStart", breakStart); map.put("breakEnd", breakEnd); map.put("slotDuration", slotDuration); map.put("maxTeacherSlots", maxTeacherSlots); return map; } // Added maxTeacherSlots
-    public static TimeConfiguration fromJsonSnippet(String jsonSnippet) { String ws = extractJsonStringValue(jsonSnippet, "workStart"); String we = extractJsonStringValue(jsonSnippet, "workEnd"); String bs = extractJsonStringValue(jsonSnippet, "breakStart"); String be = extractJsonStringValue(jsonSnippet, "breakEnd"); int sd = extractJsonIntValue(jsonSnippet, "slotDuration"); int mts = extractJsonIntValue(jsonSnippet, "maxTeacherSlots"); // Extract maxTeacherSlots
-        if (ws != null && we != null && bs != null && be != null && sd != -1 && mts != -1) { // Check mts
-            return new TimeConfiguration(ws, we, bs, be, sd, mts); // Add mts
-        } return null; }
-    private static String extractJsonStringValue(String json, String key) { Matcher m = Pattern.compile("\"" + key + "\":\\s*\"([^\"]*)\"").matcher(json); return m.find() ? m.group(1) : null; }
-    private static int extractJsonIntValue(String json, String key) { Matcher m = Pattern.compile("\"" + key + "\":\\s*(\\d+)").matcher(json); return m.find() ? Integer.parseInt(m.group(1)) : -1; }
-}
-// --- End Data Structures for Save Simulation ---
 
 
 public class ClassMesh extends Application {
     //About Section Constants
+
+    // --- Data Structures for Save Simulation ---
+    record TimeConfiguration(String workStart, String workEnd, String breakStart, String breakEnd, int slotDuration, int maxTeacherSlots) {// Added maxTeacherSlots
+
+
+    }
+
+
+
+// --- End Data Structures for Save Simulation ---
+
+    // Helper record to temporarily store UI data for a subject
+    record TempSubjectUIData(String subjectName, Integer hours) {}
+
+    // Helper record to temporarily store UI data for a semester
+    record TempSemesterUIData(String semesterName, Integer subjectCount, List<TempSubjectUIData> subjects) {}
+
+
+    // NEW Configuration Data Structures
+    record SubjectDetailConfig(String name, int hours) {}
+
+    record SemesterConfigData(String name, List<SubjectDetailConfig> subjects) {}
+
+    record TeacherAssignmentConfig(String subjectName, String semesterName) {}
+
+    record TeacherConfigData(String name, List<TeacherAssignmentConfig> assignedSubjects) {}
+
+    // Main configuration container class
+    // Inside public class ClassMesh extends Application { ...
+    static class AppConfiguration { // <--- Add static keyword
+        public String schoolName;
+        public String departmentName;
+        public TimeConfiguration timeSettings;
+        public List<SemesterConfigData> semesterConfigurations;
+        public List<TeacherConfigData> teacherConfigurations;
+        public Integer maxConsecutiveSlotsPerSubject;
+
+        // Default constructor for Jackson (already there, which is good)
+        public AppConfiguration() {}
+
+        // Getters and setters are still good practice
+    }
+    // ...
     private static final String APP_NAME = "ClassMesh";
-    private static final String APP_VERSION = "1.2.0";
+    private static final String APP_VERSION = "1.3.0";
     private static final String DEVELOPER_NAME = "Musaib Nazir";
     private static final String DEVELOPER_EMAIL = "grmusa9797@gmail.com";
     private static final String DEVELOPER_CONTACT = "+91-9541757976";
+
+
     // --- Constants ---
     private static final String MAIN_CONTAINER_STYLE_CLASS = "main-config-pane";
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
@@ -117,11 +299,19 @@ public class ClassMesh extends Application {
     private static final int DEFAULT_SUBJECT_HOURS = 3; // Fallback default if calculation fails
     private static final int MAX_SUBJECT_HOURS_SPINNER = 50; // Max value for the spinner
     private static final int ABSOLUTE_MAX_SUBJECTS = 50; // Absolute max subjects in dropdown
+    private static final String ALLOWED_MAC_ADDRESS = "74-13-EA-30-C9-5C";
+    private int maxConsecutiveSlotsPerSubject = 0;
+
 
     // --- UI Elements ---
+    private TextField schoolNameField; // For School/College Name input
+    private TextField departmentNameField; // For Department Name input
+    private String schoolName = ""; // To store the School/College Name
+    private String departmentName = ""; // To store the Department Name
     private ComboBox<Integer> semCountComboBox; private GridPane semesterSubjectGrid; private Node semesterSectionContainer;
     private VBox timeConfigSection; private ComboBox<String> workStartTimeCombo; private ComboBox<String> workEndTimeCombo; private ComboBox<String> breakStartTimeCombo; private ComboBox<String> breakEndTimeCombo; private ComboBox<Integer> slotDurationCombo; private Label workingHoursLabel;
     private Spinner<Integer> maxTeacherSlotsSpinner; // New spinner for teacher slots
+    private Spinner<Integer> maxConsecutiveSubjectSpinner;
     private Label teacherSectionTitle; private Label teacherMapTitle; private ComboBox<Integer> teacherCountComboBox; private GridPane teacherMappingGrid; private Node teacherSectionContainer;
     private Button generateButton;
     private VBox mainContentVBox; private TabPane mainTabPane; private Tab generatedTimetableTab; private GridPane timetableDisplayGrid; private ScrollPane generatedScrollPane;
@@ -141,8 +331,7 @@ public class ClassMesh extends Application {
     private final Set<SubjectContext> globallySelectedSubjectContexts = new HashSet<>();
     private List<TimetableEntry> lastGeneratedTimetable = null; // Store generated timetable for export
 
-    // --- State for Loaded Configuration ---
-    private String loadedJsonData = null; private boolean configLoadedFromFile = false;
+    private boolean configLoadedFromFile = false;
 
     // Flag to prevent recursive updates during auto-adjustment
     private final AtomicBoolean isAdjustingHours = new AtomicBoolean(false);
@@ -156,15 +345,31 @@ public class ClassMesh extends Application {
         BorderPane mainLayout = new BorderPane(); mainContentVBox = new VBox(); mainContentVBox.setPadding(new Insets(10)); mainContentVBox.setStyle("-fx-border-color:#6ca0dc;-fx-border-width: 0 2 2 2;-fx-border-radius:0 0 4 4;"); VBox.setVgrow(mainContentVBox, Priority.ALWAYS);
         mainLayout.setTop(createMenuBar(stage));
         ScrollPane inputScrollPane = new ScrollPane(); inputScrollPane.setContent(mainContentVBox); inputScrollPane.setFitToWidth(true); inputScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED); inputScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER); inputScrollPane.setStyle("-fx-background-color: transparent;"); mainLayout.setCenter(inputScrollPane);
-
+        if (!isOperationAllowed()) {
+            showErrorAlert("Security Restriction",
+                    "This application is not authorized to run on this computer.\n" +
+                            "Please contact the application provider for assistance.");
+            Platform.exit(); // Exit JavaFX application
+            System.exit(0);  // Ensure JVM terminates
+            return;          // Stop further execution of the start method
+        }
         // --- Create UI Sections ---
+
         timeConfigSection = createTimeConfigurationSection();
         semesterSectionContainer = createSemesterInputSection();
         teacherSectionContainer = createTeacherMappingSection();
+
+        // Container for the new section
+        Node schoolInfoSectionContainer = createSchoolInfoSection(); // ADD THIS LINE
+        timeConfigSection = createTimeConfigurationSection();
+        semesterSectionContainer = createSemesterInputSection();
+
         Node generateButtonSection = createGenerateButtonSection();
 
+
         // --- Add Sections to mainContentVBox in the NEW desired order ---
-        mainContentVBox.getChildren().addAll(timeConfigSection, semesterSectionContainer, teacherSectionContainer, generateButtonSection);
+        // --- Add Sections to mainContentVBox in the NEW desired order ---
+        mainContentVBox.getChildren().addAll(schoolInfoSectionContainer, timeConfigSection, semesterSectionContainer, teacherSectionContainer, generateButtonSection); //added College Name input section in last modification
 
         // --- TabPane Setup ---
         mainTabPane = new TabPane(); Tab inputTab = new Tab("Input Details", mainLayout); inputTab.setClosable(false);
@@ -222,70 +427,263 @@ public class ClassMesh extends Application {
         return sectionContainer;
     }
 
-    /** Builds the content of the semesterSubjectGrid based on semCountComboBox */
+    /** Builds the content of the semesterSubjectGrid based on semCountComboBox, preserving existing data where possible */
+    // Ensure these helper records are defined in your ClassMesh class or accessible:
+    // private record TempSubjectUIData(String subjectName, Integer hours) {}
+    // private record TempSemesterUIData(String semesterName, Integer subjectCount, List<TempSubjectUIData> subjects) {}
+
     private void buildSemesterSubjectGrid() {
-        semesterSubjectGrid.getChildren().clear(); hideTeacherSection();
-        Integer selectedCount = semCountComboBox.getValue(); if (selectedCount == null || selectedCount <= 0) return;
+        System.out.println("--- buildSemesterSubjectGrid CALLED ---"); // DEBUG
+        // --- 1. Read and Store Existing Data from the UI (using your provided logic) ---
+        List<TempSemesterUIData> oldDataList = new ArrayList<>();
+        if (!semesterSubjectGrid.getChildren().isEmpty()) {
+            int maxCurrentSemRow = -1;
+            for (Node node : semesterSubjectGrid.getChildrenUnmodifiable()) {
+                Integer r = GridPane.getRowIndex(node);
+                if (r != null) {
+                    if ((GridPane.getColumnIndex(node) == 0 && node instanceof TextField) ||
+                            (GridPane.getColumnIndex(node) == 1 && node instanceof VBox && node.getId() != null && node.getId().startsWith("subjectInputArea_"))) {
+                        if (r > maxCurrentSemRow) maxCurrentSemRow = r;
+                    }
+                }
+            }
 
-        int maxPossibleSubjects = (maxWeeklyHoursPerSemester > 0 && MIN_SUBJECT_HOURS > 0) ? (maxWeeklyHoursPerSemester / MIN_SUBJECT_HOURS) : 0;
+            for (int i = 0; i <= maxCurrentSemRow; i++) {
+                TextField semNameFieldNode = (TextField) findNodeInGrid(semesterSubjectGrid, i, 0);
+                VBox subjectInputAreaNode = (VBox) findNodeInGrid(semesterSubjectGrid, i, 1);
+
+                if (semNameFieldNode == null && subjectInputAreaNode == null) continue; // Skip if row is completely empty
+
+                String semName = (semNameFieldNode != null) ? semNameFieldNode.getText() : "Semester " + (i + 1); // Default name if field somehow null
+                ComboBox<Integer> subCountComboNode = null;
+                FlowPane subDetailPaneNode = null;
+
+                if (subjectInputAreaNode != null) {
+                    for (Node n : subjectInputAreaNode.getChildrenUnmodifiable()) {
+                        if (n instanceof ComboBox) subCountComboNode = (ComboBox<Integer>) n;
+                        else if (n instanceof FlowPane) subDetailPaneNode = (FlowPane) n;
+                    }
+                }
+
+                Integer subCount = (subCountComboNode != null) ? subCountComboNode.getValue() : 0;
+
+                List<TempSubjectUIData> subjectsData = new ArrayList<>();
+                if (subDetailPaneNode != null && subCount > 0) {
+                    int collectedSubjects = 0;
+                    for (Node entryBoxNode : subDetailPaneNode.getChildrenUnmodifiable()) {
+                        if (collectedSubjects >= subCount) break;
+                        if (entryBoxNode instanceof HBox) {
+                            TextField subNameNode = null;
+                            Spinner<Integer> hoursSpinnerNode = null;
+                            for (Node item : ((HBox) entryBoxNode).getChildrenUnmodifiable()) {
+                                if (item instanceof TextField) subNameNode = (TextField) item;
+                                else if (item instanceof Spinner) hoursSpinnerNode = (Spinner<Integer>) item;
+                            }
+                            if (subNameNode != null && hoursSpinnerNode != null && hoursSpinnerNode.getValue() != null) {
+                                subjectsData.add(new TempSubjectUIData(subNameNode.getText(), hoursSpinnerNode.getValue()));
+                                collectedSubjects++;
+                            }
+                        }
+                    }
+                }
+                oldDataList.add(new TempSemesterUIData(semName, subCount, subjectsData));
+            }
+        }
+        System.out.println("buildSemesterSubjectGrid - Extracted oldDataList size: " + oldDataList.size());
+
+
+        // --- 2. Clear the visual grid and get the new semester count ---
+        semesterSubjectGrid.getChildren().clear();
+        hideTeacherSection();
+
+        Integer selectedCount = semCountComboBox.getValue();
+        if (selectedCount == null || selectedCount <= 0) {
+            System.out.println("buildSemesterSubjectGrid - selectedCount is invalid or zero, returning.");
+            // Remove "Next" button if it exists from a previous build with selectedCount > 0
+            Node oldNextButton = null;
+            for(Node child : semesterSubjectGrid.getChildrenUnmodifiable()){
+                if(child instanceof Button && "Next -> Define Teachers".equals(((Button)child).getText())){
+                    oldNextButton = child;
+                    break;
+                }
+            }
+            if(oldNextButton != null) semesterSubjectGrid.getChildren().remove(oldNextButton);
+            return;
+        }
+        System.out.println("buildSemesterSubjectGrid - New selectedCount from ComboBox: " + selectedCount);
+
+
+        int maxPossibleSubjects = (maxWeeklyHoursPerSemester > 0 && MIN_SUBJECT_HOURS > 0) ? (maxWeeklyHoursPerSemester / MIN_SUBJECT_HOURS) : DEFAULT_SUBJECT_HOURS * 5;
         int maxSubjectsToShow = Math.min(ABSOLUTE_MAX_SUBJECTS, maxPossibleSubjects);
-        System.out.println("DEBUG: Max possible subjects calculated: " + maxPossibleSubjects + ", Showing up to: " + maxSubjectsToShow);
+        if (maxSubjectsToShow <= 0 && maxWeeklyHoursPerSemester > 0) maxSubjectsToShow = DEFAULT_SUBJECT_HOURS * 5;
+        else if (maxSubjectsToShow <= 0) maxSubjectsToShow = 10;
 
-        for (int semIndex = 0; semIndex < selectedCount; semIndex++) {
-            TextField semNameField = new TextField(); semNameField.setPromptText("Semester/Class " + (semIndex + 1) + " Name"); semNameField.setId("semName_" + semIndex);
-            ComboBox<Integer> subCountCombo = new ComboBox<>(); subCountCombo.setPromptText("Subject Count");
-            subCountCombo.getItems().add(0); // Allow zero subjects
-            for (int j = 1; j <= maxSubjectsToShow; j++) { subCountCombo.getItems().add(j); }
+
+        // --- 3. Rebuild the grid, pre-filling with old data where available ---
+        for (int semIndexLoop = 0; semIndexLoop < selectedCount; semIndexLoop++) {
+            final int semIndex = semIndexLoop; // Effectively final for use in lambdas
+
+            final TextField semNameField = new TextField();
+            semNameField.setPromptText("Semester/Class " + (semIndex + 1) + " Name");
+            semNameField.setId("semName_" + semIndex);
+
+            final ComboBox<Integer> subCountCombo = new ComboBox<>();
+            subCountCombo.setPromptText("Subject Count");
+            subCountCombo.getItems().add(0);
+            for (int j = 1; j <= maxSubjectsToShow; j++) {
+                subCountCombo.getItems().add(j);
+            }
             subCountCombo.setId("subCount_" + semIndex);
 
-            FlowPane subDetailPane = new FlowPane(Orientation.HORIZONTAL, 10, 5); subDetailPane.setId("subDetailPane_" + semIndex); subDetailPane.setPrefWrapLength(400);
-            int finalSemIndex = semIndex;
+            final FlowPane subDetailPane = new FlowPane(Orientation.HORIZONTAL, 10, 5);
+            subDetailPane.setId("subDetailPane_" + semIndex);
+            subDetailPane.setPrefWrapLength(400);
+
+            // This setOnAction will *only* build the UI structure for subjects
             subCountCombo.setOnAction(e -> {
+                System.out.println("subCountCombo onAction for semIndex " + semIndex + ", new sub count: " + subCountCombo.getValue());
                 subDetailPane.getChildren().clear();
                 Integer numSubs = subCountCombo.getValue();
                 if (numSubs == null || numSubs <= 0) return;
 
-                int defaultHours = Math.min(DEFAULT_SUBJECT_HOURS, MAX_SUBJECT_HOURS_SPINNER); // Use simple default
+                int defaultHoursVal = Math.min(DEFAULT_SUBJECT_HOURS, MAX_SUBJECT_HOURS_SPINNER);
 
-                for (int subIndex = 0; subIndex < numSubs; subIndex++) {
-                    TextField subNameField = new TextField(); subNameField.setPromptText("Subject " + (subIndex + 1) + " Name"); subNameField.setId("subName_" + finalSemIndex + "_" + subIndex);
-                    Spinner<Integer> hoursSpinner = new Spinner<>(MIN_SUBJECT_HOURS, MAX_SUBJECT_HOURS_SPINNER, defaultHours);
-                    hoursSpinner.setPrefWidth(70); hoursSpinner.setEditable(true); hoursSpinner.setId("subHours_" + finalSemIndex + "_" + subIndex);
-                    HBox entryBox = new HBox(5, subNameField, new Label("Hrs/Week:"), hoursSpinner); entryBox.setAlignment(Pos.CENTER_LEFT);
-                    // Attach listener for auto-adjustment
-                    hoursSpinner.valueProperty().addListener((obs, oldValue, newValue) -> {
-                        if (!isAdjustingHours.get()) { // Only adjust if not already adjusting
-                            adjustHoursWithinSemester(subDetailPane, hoursSpinner);
-                            // Show alert AFTER adjustment attempt, if needed
-                            Platform.runLater(() -> {
-                                if (adjustmentAlertPending) {
-                                    // Alert removed, just keep the flag logic for now
-                                    // showInfoAlert("Hours Adjusted", "Subject hours automatically adjusted to fit within the calculated weekly limit ("+ maxWeeklyHoursPerSemester +" hrs) for this semester.");
-                                    adjustmentAlertPending = false; // Reset flag
-                                }
-                            });
+                for (int subIdx = 0; subIdx < numSubs; subIdx++) {
+                    TextField newSubNameField = new TextField();
+                    newSubNameField.setPromptText("Subject " + (subIdx + 1) + " Name");
+                    newSubNameField.setId("subName_" + semIndex + "_" + subIdx);
+
+                    // --- INTEGRATED ENHANCED SPINNER LOGIC ---
+                    final Spinner<Integer> newHoursSpinner = new Spinner<>(); // Make final for listeners
+                    final SpinnerValueFactory.IntegerSpinnerValueFactory valueFactory = new SpinnerValueFactory.IntegerSpinnerValueFactory(
+                            MIN_SUBJECT_HOURS, MAX_SUBJECT_HOURS_SPINNER, defaultHoursVal);
+                    newHoursSpinner.setValueFactory(valueFactory);
+                    newHoursSpinner.setEditable(true);
+                    newHoursSpinner.setPrefWidth(70);
+                    newHoursSpinner.setId("subHours_" + semIndex + "_" + subIdx);
+
+                    final TextField editor = newHoursSpinner.getEditor();
+                    // Capture subDetailPane for use in adjustHoursWithinSemester if needed from valueProperty
+                    final FlowPane currentSemesterSubDetailPane = subDetailPane;
+
+                    Runnable commitHandler = () -> {
+                        String text = editor.getText();
+                        try {
+                            Integer value = valueFactory.getConverter().fromString(text);
+                            if (value != null) {
+                                valueFactory.setValue(value); // Factory handles clamping
+                            } else { // Revert if converter returns null (e.g. for empty string)
+                                editor.setText(valueFactory.getConverter().toString(valueFactory.getValue()));
+                            }
+                        } catch (NumberFormatException nfe) { // Revert if not a number
+                            editor.setText(valueFactory.getConverter().toString(valueFactory.getValue()));
+                        } catch (Exception ex) { // Catch any other parsing issues
+                            System.err.println("Error parsing spinner value: " + text + " - " + ex.getMessage());
+                            editor.setText(valueFactory.getConverter().toString(valueFactory.getValue()));
+                        }
+                    };
+
+                    editor.setOnAction(event -> {
+                        commitHandler.run();
+                        event.consume();
+                    });
+
+                    editor.focusedProperty().addListener((obs, oldFocus, newFocus) -> {
+                        if (!newFocus) { // Lost focus
+                            commitHandler.run();
                         }
                     });
+
+                    newHoursSpinner.valueProperty().addListener((obs, oldValue, newValue) -> {
+                        if (newValue != null) {
+                            if (!isAdjustingHours.get()) {
+                                adjustHoursWithinSemester(currentSemesterSubDetailPane, newHoursSpinner);
+                                Platform.runLater(() -> {
+                                    if (adjustmentAlertPending) adjustmentAlertPending = false;
+                                });
+                            }
+                        }
+                    });
+                    // --- END OF ENHANCED SPINNER LOGIC ---
+
+                    HBox entryBox = new HBox(5, newSubNameField, new Label("Hrs/Week:"), newHoursSpinner);
+                    entryBox.setAlignment(Pos.CENTER_LEFT);
                     subDetailPane.getChildren().add(entryBox);
                 }
-                // Initial check/adjustment after creating spinners
-                adjustHoursWithinSemester(subDetailPane, null);
-                // Show alert immediately if initial adjustment was needed
-                Platform.runLater(() -> {
-                    if (adjustmentAlertPending) {
-
-                        // showInfoAlert("Hours Adjusted", "Initial subject hours automatically adjusted to fit within the calculated weekly limit ("+ maxWeeklyHoursPerSemester +" hrs) for this semester.");
-                        adjustmentAlertPending = false; // Reset flag
-                    }
-                });
+                // Initial adjustment after creating spinners for this semester if any subjects added
+                if (numSubs > 0) {
+                    adjustHoursWithinSemester(subDetailPane, null);
+                    Platform.runLater(() -> { if (adjustmentAlertPending) adjustmentAlertPending = false; });
+                }
             });
-            VBox subjectInputArea = new VBox(5, subCountCombo, subDetailPane); subjectInputArea.setId("subjectInputArea_" + semIndex);
-            semesterSubjectGrid.add(semNameField, 0, semIndex); semesterSubjectGrid.add(subjectInputArea, 1, semIndex);
-            GridPane.setHgrow(semNameField, Priority.SOMETIMES); GridPane.setHgrow(subjectInputArea, Priority.ALWAYS);
+
+            // Apply old data if available for this semester index
+            final TempSemesterUIData existingSemData = (semIndex < oldDataList.size()) ? oldDataList.get(semIndex) : null;
+
+            if (existingSemData != null) {
+                semNameField.setText(existingSemData.semesterName());
+                final Integer savedSubjectCount = existingSemData.subjectCount(); // Make effectively final
+
+                if (savedSubjectCount != null) {
+                    System.out.println("Applying old data for semIndex " + semIndex + ": SemName=" + existingSemData.semesterName() + ", SubCount=" + savedSubjectCount);
+                    subCountCombo.setValue(savedSubjectCount); // Triggers onAction, building empty HBoxes
+
+                    // Schedule the population of these newly created fields on the JavaFX thread
+                    Platform.runLater(() -> {
+                        System.out.println("Platform.runLater for semIndex: " + semIndex +
+                                " - Children in subDetailPane: " + subDetailPane.getChildren().size() +
+                                ". Expected subjects from old data: " + (existingSemData.subjectCount() != null ? existingSemData.subjectCount() : "N/A"));
+
+                        if (existingSemData.subjectCount() != null) { // Re-check existingSemData inside lambda
+                            int expectedCount = existingSemData.subjectCount();
+                            // Check if UI structure matches expected data
+                            if (subDetailPane.getChildren().size() == expectedCount &&
+                                    existingSemData.subjects() != null && !existingSemData.subjects().isEmpty()) {
+                                System.out.println("Proceeding to fill " + expectedCount + " subject(s) for semIndex: " + semIndex);
+                                for (int subIndex = 0; subIndex < expectedCount; subIndex++) {
+                                    if (subIndex < subDetailPane.getChildren().size() && subIndex < existingSemData.subjects().size()) {
+                                        Node entryBoxNode = subDetailPane.getChildren().get(subIndex);
+                                        if (entryBoxNode instanceof HBox) {
+                                            TempSubjectUIData oldSub = existingSemData.subjects().get(subIndex);
+                                            TextField subjectNameFieldInBox = null;
+                                            Spinner<Integer> hoursSpinnerInBox = null;
+                                            for (Node item : ((HBox) entryBoxNode).getChildrenUnmodifiable()) {
+                                                if (item instanceof TextField) subjectNameFieldInBox = (TextField) item;
+                                                else if (item instanceof Spinner) hoursSpinnerInBox = (Spinner<Integer>) item;
+                                            }
+                                            if (subjectNameFieldInBox != null && oldSub.subjectName() != null) subjectNameFieldInBox.setText(oldSub.subjectName());
+                                            if (hoursSpinnerInBox != null && oldSub.hours() != null) hoursSpinnerInBox.getValueFactory().setValue(oldSub.hours());
+                                        }
+                                    } else { System.out.println("DEBUG WARNING: Index out of bounds during subject fill for semIndex: " + semIndex + ", subIndex: " + subIndex); }
+                                }
+                            } else {
+                                System.out.println("Mismatch or no subjects to fill (Platform.runLater) for semIndex: " + semIndex +
+                                        ". Actual Children: " + subDetailPane.getChildren().size() +
+                                        ", Expected: " + expectedCount +
+                                        ", Old subjects list empty: " + (existingSemData.subjects() == null || existingSemData.subjects().isEmpty()));
+                            }
+                        } else { System.out.println("No valid subject count in existingSemData for semIndex: " + semIndex + " (within Platform.runLater)"); }
+                    });
+                }
+            }
+
+            VBox subjectInputArea = new VBox(5, subCountCombo, subDetailPane);
+            subjectInputArea.setId("subjectInputArea_" + semIndex);
+
+            semesterSubjectGrid.add(semNameField, 0, semIndex);
+            semesterSubjectGrid.add(subjectInputArea, 1, semIndex);
+            GridPane.setHgrow(semNameField, Priority.SOMETIMES);
+            GridPane.setHgrow(subjectInputArea, Priority.ALWAYS);
         }
-        Button nextButton = new Button("Next -> Define Teachers"); nextButton.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white; -fx-font-size: 14px; -fx-padding: 6 16 6 16; -fx-background-radius: 6;");
+
+        // --- 4. Add "Next" button ---
+        Button nextButton = new Button("Next -> Define Teachers");
+        nextButton.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white; -fx-font-size: 14px; -fx-padding: 6 16 6 16; -fx-background-radius: 6;");
         nextButton.setOnAction(e -> handleSemesterNextClick(semesterSubjectGrid, selectedCount));
-        semesterSubjectGrid.add(nextButton, 0, selectedCount, 2, 1); GridPane.setHalignment(nextButton, Pos.CENTER.getHpos()); GridPane.setMargin(nextButton, new Insets(15, 0, 0, 0));
+        semesterSubjectGrid.add(nextButton, 0, selectedCount, 2, 1);
+        GridPane.setHalignment(nextButton, Pos.CENTER.getHpos());
+        GridPane.setMargin(nextButton, new Insets(15, 0, 0, 0));
+        System.out.println("--- buildSemesterSubjectGrid FINISHED ---");
     }
 
 
@@ -300,6 +698,11 @@ public class ClassMesh extends Application {
         breakStartTimeCombo = new ComboBox<>(timeOptions); breakStartTimeCombo.setPromptText("Break Start"); breakStartTimeCombo.setValue("13:00");
         breakEndTimeCombo = new ComboBox<>(timeOptions); breakEndTimeCombo.setPromptText("Break End"); breakEndTimeCombo.setValue("14:00");
         slotDurationCombo = new ComboBox<>(); slotDurationCombo.setPromptText("Slot Duration (min)"); slotDurationCombo.getItems().addAll(30, 45, 50, 55, 60, 90); slotDurationCombo.setValue(60);
+
+        maxConsecutiveSubjectSpinner = new Spinner<>(1, 8, 3); // Min 1, Max 5, Default 2 (Adjust range as needed)
+        maxConsecutiveSubjectSpinner.setPrefWidth(70);
+        maxConsecutiveSubjectSpinner.setEditable(true);
+
         // New Spinner for Max Teacher Slots
         maxTeacherSlotsSpinner = new Spinner<>(1, 8, 2); // Min 1, Max 8, Default 2
         maxTeacherSlotsSpinner.setPrefWidth(70);
@@ -310,8 +713,9 @@ public class ClassMesh extends Application {
         timeGrid.addRow(0, new Label("Working Hours:"), workStartTimeCombo, new Label("to"), workEndTimeCombo);
         timeGrid.addRow(1, new Label("Break Time:"), breakStartTimeCombo, new Label("to"), breakEndTimeCombo);
         timeGrid.addRow(2, new Label("Class Duration:"), slotDurationCombo);
-        timeGrid.addRow(3, new Label("Max Classes/Teacher/Day:"), maxTeacherSlotsSpinner); // Add new row
-        timeGrid.add(workingHoursLabel, 1, 4, 3, 1); // Move working hours label down
+        timeGrid.addRow(3, new Label("Max Classes/Teacher/Day:"), maxTeacherSlotsSpinner);
+        timeGrid.addRow(4,new Label("Consecutive Classes/Subject"),maxConsecutiveSubjectSpinner);// Add new row
+        timeGrid.add(workingHoursLabel, 1, 5, 3, 1); // Move working hours label down
         Button timeNextButton = new Button("Next -> Define Semesters"); timeNextButton.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white; -fx-font-size: 14px; -fx-padding: 6 16 6 16; -fx-background-radius: 6;");
         timeNextButton.setOnAction(e -> handleTimeConfigNextClick());
         container.getChildren().addAll(timeTitle, timeGrid, timeNextButton); container.setAlignment(Pos.CENTER_LEFT); VBox.setMargin(timeNextButton, new Insets(15, 0, 0, 0));
@@ -332,7 +736,42 @@ public class ClassMesh extends Application {
         sectionContainer.getChildren().addAll(teacherSectionTitle, teacherCountComboBox, teacherMapTitle, teacherMappingGrid);
         return sectionContainer;
     }
+    /** Creates the School/College and Department Information Input Section */
+    private Node createSchoolInfoSection() {
+        VBox sectionContainer = new VBox(10);
+        sectionContainer.setPadding(new Insets(10, 0, 10, 0));
+        // Optional: Add a border like other sections if desired
+        // sectionContainer.setStyle("-fx-border-color:#6ca0dc;-fx-border-width: 0 0 2 0;-fx-padding: 15 0 15 0;");
+        sectionContainer.setId("schoolInfoSectionBox");
 
+        Label titleLabel = new Label("Institution Information");
+        titleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        titleLabel.setPadding(new Insets(0, 0, 5, 0));
+
+        GridPane infoGrid = new GridPane();
+        infoGrid.setHgap(10);
+        infoGrid.setVgap(8);
+        infoGrid.setPadding(new Insets(0, 0, 0, 10)); // Indent content slightly
+
+        schoolNameField = new TextField();
+        schoolNameField.setPromptText("Enter School/College Name");
+        schoolNameField.setPrefWidth(300); // Adjust width as needed
+
+        departmentNameField = new TextField();
+        departmentNameField.setPromptText("Enter Department Name");
+        departmentNameField.setPrefWidth(300); // Adjust width as needed
+
+        infoGrid.addRow(0, new Label("School/College:"), schoolNameField);
+        infoGrid.addRow(1, new Label("Department:"), departmentNameField);
+
+        // Listener to update instance variables when text changes
+        schoolNameField.textProperty().addListener((obs, oldVal, newVal) -> schoolName = newVal.trim());
+        departmentNameField.textProperty().addListener((obs, oldVal, newVal) -> departmentName = newVal.trim());
+
+
+        sectionContainer.getChildren().addAll(titleLabel, infoGrid);
+        return sectionContainer;
+    }
     /** Creates the Generate Button Section */
     private Node createGenerateButtonSection() {
         generateButton = new Button("Generate Timetable"); generateButton.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-size: 16px; -fx-padding: 10 20 10 20; -fx-background-radius: 6;");
@@ -346,6 +785,11 @@ public class ClassMesh extends Application {
         timetableDisplayGrid = new GridPane();
         timetableDisplayGrid.setPadding(new Insets(10)); timetableDisplayGrid.setHgap(2); timetableDisplayGrid.setVgap(2);
         timetableDisplayGrid.setAlignment(Pos.TOP_LEFT); timetableDisplayGrid.setGridLinesVisible(true);
+
+        Label schoolNameLabelForTab = new Label();
+        schoolNameLabelForTab.setFont(Font.font("System", FontWeight.BOLD, 16));
+        Label departmentNameLabelForTab = new Label();
+        departmentNameLabelForTab.setFont(Font.font("System", FontWeight.NORMAL, 14));
 
         generatedScrollPane = new ScrollPane(timetableDisplayGrid);
         generatedScrollPane.setFitToWidth(true);
@@ -370,13 +814,26 @@ public class ClassMesh extends Application {
         VBox tabContent = new VBox(10);
         tabContent.setPadding(new Insets(10));
         tabContent.setAlignment(Pos.CENTER);
-        Label placeholderLabel = new Label("Generated Timetable");
+//        Label placeholderLabel = new Label("Generated Timetable");
+//        placeholderLabel.setFont(Font.font("System", FontWeight.BOLD, 12)); // Style it a bit
+//        placeholderLabel.setPadding(new Insets(5,0,0,0));
+
         // Add ScrollPane and then Button Box
-        tabContent.getChildren().addAll(placeholderLabel, generatedScrollPane, exportButtonBox);
+        tabContent.getChildren().addAll(schoolNameLabelForTab,departmentNameLabelForTab, generatedScrollPane, exportButtonBox);
         VBox.setVgrow(generatedScrollPane, Priority.ALWAYS); // Timetable grid takes up most space
 
         generatedTimetableTab = new Tab("Generated Timetable", tabContent);
         generatedTimetableTab.setClosable(false);
+        generatedTimetableTab.selectedProperty().addListener((obs, wasSelected, isNowSelected) -> {
+            if (isNowSelected) {
+                schoolNameLabelForTab.setText(schoolNameField.getText().trim()); // Or use stored schoolName
+                departmentNameLabelForTab.setText(departmentNameField.getText().trim()); // Or use stored departmentName
+                schoolNameLabelForTab.setVisible(!schoolNameField.getText().trim().isEmpty());
+                schoolNameLabelForTab.setManaged(!schoolNameField.getText().trim().isEmpty());
+                departmentNameLabelForTab.setVisible(!departmentNameField.getText().trim().isEmpty());
+                departmentNameLabelForTab.setManaged(!departmentNameField.getText().trim().isEmpty());
+            }
+        });
         return generatedTimetableTab;
     }
 
@@ -472,18 +929,26 @@ public class ClassMesh extends Application {
             String bs = breakStartTimeCombo.getValue(); String be = breakEndTimeCombo.getValue();
             Integer duration = slotDurationCombo.getValue();
             Integer maxSlots = maxTeacherSlotsSpinner.getValue(); // Get value from new spinner
+            Integer maxConsecutiveSub = maxConsecutiveSubjectSpinner.getValue();
 
             if (ws == null) { errorMsg = "Select Work Start Time."; nodeToHighlight = workStartTimeCombo; }
             else if (we == null) { errorMsg = "Select Work End Time."; nodeToHighlight = workEndTimeCombo; }
             else if (bs == null) { errorMsg = "Select Break Start Time."; nodeToHighlight = breakStartTimeCombo; }
             else if (be == null) { errorMsg = "Select Break End Time."; nodeToHighlight = breakEndTimeCombo; }
             else if (duration == null) { errorMsg = "Select Slot Duration."; nodeToHighlight = slotDurationCombo; }
-            else if (maxSlots == null) { errorMsg = "Select Max Classes/Teacher/Day."; nodeToHighlight = maxTeacherSlotsSpinner; } // Validate new input
+            else if (maxSlots == null) { errorMsg = "Select Max Classes/Teacher/Day."; nodeToHighlight = maxTeacherSlotsSpinner; }
+            else if (maxConsecutiveSub == null) {
+                errorMsg = "Select Max Consecutive Slots for Same Subject.";
+                nodeToHighlight = maxConsecutiveSubjectSpinner;
+            }// Validate new input
             else {
-                workStartTime = LocalTime.parse(ws, TIME_FORMATTER); workEndTime = LocalTime.parse(we, TIME_FORMATTER);
-                breakStartTime = LocalTime.parse(bs, TIME_FORMATTER); breakEndTime = LocalTime.parse(be, TIME_FORMATTER);
+                workStartTime = LocalTime.parse(ws, TIME_FORMATTER);
+                workEndTime = LocalTime.parse(we, TIME_FORMATTER);
+                breakStartTime = LocalTime.parse(bs, TIME_FORMATTER);
+                breakEndTime = LocalTime.parse(be, TIME_FORMATTER);
                 slotDurationMinutes = duration;
-                maxTeacherSlotsPerDay = maxSlots; // Store the value
+                maxTeacherSlotsPerDay = maxSlots;
+                maxConsecutiveSlotsPerSubject = maxConsecutiveSub;  // Store the value
 
                 if (workEndTime.isBefore(workStartTime) || workEndTime.equals(workStartTime)) { errorMsg = "Work End Time must be after Work Start Time."; nodeToHighlight = workEndTimeCombo; }
                 else if (breakEndTime.isBefore(breakStartTime) || breakEndTime.equals(breakStartTime)) { errorMsg = "Break End Time must be after Break Start Time."; nodeToHighlight = breakEndTimeCombo; }
@@ -620,7 +1085,7 @@ public class ClassMesh extends Application {
             } else if (subTeachCount > 0) { teachersValid = false; teacherError = "Subject grid missing for " + teachName; System.err.println("DEBUG: " + teacherError); break; } if (!teachersValid) break; teacherList.add(currentTeacher); teacherAssignmentsMap.put(currentTeacher, currentAssignments); System.out.println("DEBUG: Validated Teacher: " + currentTeacher.getName() + " with " + currentAssignments.size() + " subjects."); } // End loop through teachers
         if (teachersValid) { System.out.println("--- Input Data Ready for Generation ---"); System.out.println("DEBUG: Semesters: " + semesterList.size() + ", Teachers: " + teacherList.size());
             // Pass the configured max slots per teacher
-            lastGeneratedTimetable = generateTimetableAlgorithmV2( semesterList, teacherList, teacherAssignmentsMap, workStartTime, workEndTime, breakStartTime, breakEndTime, slotDurationMinutes, WORKING_DAYS, maxTeacherSlotsPerDay );
+            lastGeneratedTimetable = generateTimetableAlgorithmV2( semesterList, teacherList, teacherAssignmentsMap, workStartTime, workEndTime, breakStartTime, breakEndTime, slotDurationMinutes, WORKING_DAYS, maxTeacherSlotsPerDay, maxConsecutiveSlotsPerSubject );
             System.out.println("DEBUG: Algorithm returned " + (lastGeneratedTimetable == null ? "null" : lastGeneratedTimetable.size() + " entries."));
             if (lastGeneratedTimetable != null) {
                 displayTimetableGrid(lastGeneratedTimetable);
@@ -652,38 +1117,166 @@ public class ClassMesh extends Application {
      */
     private List<TimetableEntry> generateTimetableAlgorithmV2(
             List<Semester> semesters, List<Teacher> teachers,
-            Map<Teacher, List<SubjectContext>> teacherAssignments, // Map of teacher to subjects they ARE assigned in UI
+            Map<Teacher, List<SubjectContext>> teacherAssignments,
             LocalTime workStart, LocalTime workEnd,
-            LocalTime breakStart, LocalTime breakEnd,
+            LocalTime breakStart, // breakStart is used implicitly by calculateTimeSlots
+            LocalTime breakEnd,   // breakEnd is what we'll use to identify post-break slots
             int slotMinutes, List<String> days,
-            int maxSlotsPerTeacherPerDay) // Added parameter
+            int maxSlotsPerTeacherPerDay,
+            int maxConsecutiveSlotsPerSubject)
     {
-        System.out.println("DEBUG: Starting Algorithm V2 with Max Teacher Slots/Day: " + maxSlotsPerTeacherPerDay); // Log the value used
-        List<TimetableEntry> timetable = new ArrayList<>(); if (semesters.isEmpty() || teachers.isEmpty()) { System.err.println("AlgoV2: Missing semesters or teachers."); return timetable; }
-        List<LocalTime> slotStartTimes = calculateTimeSlots(workStart, workEnd, breakStart, breakEnd, slotMinutes); if (slotStartTimes.isEmpty()) { System.err.println("AlgoV2: No valid time slots calculated."); return timetable; }
-        Map<Subject, List<Teacher>> subjectToTeacherMap = new HashMap<>(); for (Teacher teacher : teachers) { for (Subject subject : teacher.getSubjectsTaught()) { subjectToTeacherMap.computeIfAbsent(subject, k -> new ArrayList<>()).add(teacher); } }
-        Map<SubjectContext, Integer> requiredSlotsMap = new HashMap<>(); for (Semester sem : semesters) { for (Subject sub : sem.getSubjects()) { SubjectContext sc = new SubjectContext(sub, sem); int requiredSlots = (int) Math.ceil((double) sub.getWeeklyHours() * 60.0 / slotMinutes); requiredSlotsMap.put(sc, requiredSlots); } }
-        Map<String, Map<LocalTime, Set<Teacher>>> teacherBusyMap = new HashMap<>(); Map<SubjectContext, Integer> scheduledSlotsMap = new HashMap<>(); Map<String, Map<Semester, LinkedList<Subject>>> recentSubjectsMap = new HashMap<>(); Map<String, Map<Teacher, Integer>> teacherDailyLoadMap = new HashMap<>();
+        System.out.println("DEBUG: Starting Algorithm V2 with Max Teacher Slots/Day: " + maxSlotsPerTeacherPerDay +
+                ", Max Consecutive Slots/Subject: " + maxConsecutiveSlotsPerSubject);
+
+        List<TimetableEntry> timetable = new ArrayList<>();
+        if (semesters.isEmpty() || teachers.isEmpty()) {
+            System.err.println("AlgoV2: Missing semesters or teachers.");
+            return timetable;
+        }
+        List<LocalTime> slotStartTimes = calculateTimeSlots(workStart, workEnd, breakStart, breakEnd, slotMinutes);
+        if (slotStartTimes.isEmpty()) {
+            System.err.println("AlgoV2: No valid time slots calculated.");
+            return timetable;
+        }
+
+        Map<Subject, List<Teacher>> subjectToTeacherMap = new HashMap<>();
+        for (Teacher teacher : teachers) {
+            for (Subject subject : teacher.getSubjectsTaught()) {
+                subjectToTeacherMap.computeIfAbsent(subject, k -> new ArrayList<>()).add(teacher);
+            }
+        }
+
+        Map<SubjectContext, Integer> requiredSlotsMap = new HashMap<>();
+        for (Semester sem : semesters) {
+            for (Subject sub : sem.getSubjects()) {
+                SubjectContext sc = new SubjectContext(sub, sem);
+                int requiredSlots = (int) Math.ceil((double) sub.getWeeklyHours() * 60.0 / slotMinutes);
+                requiredSlotsMap.put(sc, requiredSlots);
+            }
+        }
+
+        Map<String, Map<LocalTime, Set<Teacher>>> teacherBusyMap = new HashMap<>();
+        Map<SubjectContext, Integer> scheduledSlotsMap = new HashMap<>();
+        Map<String, Map<Semester, LinkedList<Subject>>> recentSubjectsMap = new HashMap<>();
+        Map<String, Map<Teacher, Integer>> teacherDailyLoadMap = new HashMap<>();
+
         List<Semester> sortedSemesters = semesters.stream().sorted(Comparator.comparing(Semester::getName)).collect(Collectors.toList());
-        for (String day : days) { teacherBusyMap.put(day, new HashMap<>()); recentSubjectsMap.put(day, new HashMap<>()); teacherDailyLoadMap.put(day, new HashMap<>()); System.out.println("DEBUG: Processing Day: " + day);
-            for (LocalTime slotStart : slotStartTimes) { teacherBusyMap.get(day).computeIfAbsent(slotStart, k -> new HashSet<>());
-                for (Semester semester : sortedSemesters) { recentSubjectsMap.get(day).computeIfAbsent(semester, k -> new LinkedList<>()); Set<Teacher> busyTeachersThisSlot = teacherBusyMap.get(day).get(slotStart); LinkedList<Subject> recentSubjects = recentSubjectsMap.get(day).get(semester); Map<Teacher, Integer> dailyLoad = teacherDailyLoadMap.get(day); boolean slotFilledForThisSem = false; List<Subject> subjectsToTry = new ArrayList<>(semester.getSubjects()); Collections.shuffle(subjectsToTry);
-                    for (Subject subject : subjectsToTry) { SubjectContext currentSubjectContext = new SubjectContext(subject, semester); int required = requiredSlotsMap.getOrDefault(currentSubjectContext, 0); int scheduled = scheduledSlotsMap.getOrDefault(currentSubjectContext, 0); if (scheduled >= required) continue; if (recentSubjects.size() >= 2 && recentSubjects.get(0) != null && recentSubjects.get(1) != null && recentSubjects.get(0).equals(subject) && recentSubjects.get(1).equals(subject)) continue; List<Teacher> potentialTeachers = subjectToTeacherMap.getOrDefault(subject, Collections.emptyList()); if (potentialTeachers.isEmpty()) continue; Teacher availableTeacher = null; Collections.shuffle(potentialTeachers); for (Teacher teacher : potentialTeachers) {
-                        int currentDailySlots = dailyLoad.getOrDefault(teacher, 0);
-                        // Use the parameter instead of the constant
-                        if (!busyTeachersThisSlot.contains(teacher) && currentDailySlots < maxSlotsPerTeacherPerDay) {
-                            availableTeacher = teacher; break;
+
+        for (String day : days) {
+            teacherBusyMap.put(day, new HashMap<>());
+            recentSubjectsMap.put(day, new HashMap<>()); // Initialize recent subjects map for the day
+            teacherDailyLoadMap.put(day, new HashMap<>());
+            System.out.println("DEBUG: Processing Day: " + day);
+
+            // --- ADDED: Flag to track if the post-break reset has occurred for this day ---
+            boolean postBreakResetDoneForDay = false;
+
+            for (LocalTime slotStart : slotStartTimes) {
+                teacherBusyMap.get(day).computeIfAbsent(slotStart, k -> new HashSet<>());
+
+                // --- ADDED: Logic to determine if recent history should be cleared for this slot ---
+                boolean clearRecentHistoryForThisSlotForAllSemesters = false;
+                if (!postBreakResetDoneForDay && breakEnd != null && !slotStart.isBefore(breakEnd)) {
+                    // This condition means:
+                    // 1. We haven't done a post-break reset yet on this day.
+                    // 2. A breakEnd time is defined.
+                    // 3. The current slotStart is AT or AFTER the breakEnd time.
+                    clearRecentHistoryForThisSlotForAllSemesters = true;
+                    postBreakResetDoneForDay = true; // Mark that reset for this break transition is done for the day
+                    System.out.println("DEBUG: Day " + day + ", Slot " + slotStart.format(TIME_FORMATTER) +
+                            " is the first at/after break end (" + breakEnd.format(TIME_FORMATTER) +
+                            "). Resetting consecutive history for all semesters.");
+                }
+                // --- END ADDITION ---
+
+                for (Semester semester : sortedSemesters) {
+                    // Ensure LinkedList exists for this semester on this day
+                    LinkedList<Subject> recentSubjects = recentSubjectsMap.get(day)
+                            .computeIfAbsent(semester, k -> new LinkedList<>());
+
+                    // --- ADDED: Clear recent history for this specific semester if flagged ---
+                    if (clearRecentHistoryForThisSlotForAllSemesters) {
+                        if (!recentSubjects.isEmpty()) { // Avoid redundant operations if already empty
+                            // System.out.println("DEBUG: Clearing recent subjects for " + semester.getName()); // Optional: more verbose log
+                            recentSubjects.clear();
                         }
                     }
-                        if (availableTeacher != null) { LocalTime slotEnd = slotStart.plusMinutes(slotMinutes); if (slotEnd.isAfter(workEnd)) slotEnd = workEnd; timetable.add(new TimetableEntry(day, slotStart, slotEnd, semester, subject, availableTeacher)); busyTeachersThisSlot.add(availableTeacher); scheduledSlotsMap.put(currentSubjectContext, scheduled + 1); recentSubjects.addLast(subject); if (recentSubjects.size() > 2) recentSubjects.removeFirst(); dailyLoad.put(availableTeacher, dailyLoad.getOrDefault(availableTeacher, 0) + 1); slotFilledForThisSem = true; break; }
+                    // --- END ADDITION ---
+
+                    Set<Teacher> busyTeachersThisSlot = teacherBusyMap.get(day).get(slotStart);
+                    Map<Teacher, Integer> dailyLoad = teacherDailyLoadMap.get(day);
+                    boolean slotFilledForThisSem = false;
+                    List<Subject> subjectsToTry = new ArrayList<>(semester.getSubjects());
+                    Collections.shuffle(subjectsToTry);
+
+                    for (Subject subject : subjectsToTry) {
+                        SubjectContext currentSubjectContext = new SubjectContext(subject, semester);
+                        int required = requiredSlotsMap.getOrDefault(currentSubjectContext, 0);
+                        int scheduled = scheduledSlotsMap.getOrDefault(currentSubjectContext, 0);
+
+                        if (scheduled >= required) continue;
+
+                        // Consecutive Class Check (using the corrected logic from previous discussions)
+                        if (maxConsecutiveSlotsPerSubject > 0 && recentSubjects.size() == maxConsecutiveSlotsPerSubject) {
+                            boolean allSameAndNotNull = true;
+                            for (Subject recentSub : recentSubjects) {
+                                if (recentSub == null || !recentSub.equals(subject)) {
+                                    allSameAndNotNull = false;
+                                    break;
+                                }
+                            }
+                            if (allSameAndNotNull) {
+                                continue;
+                            }
+                        }
+
+                        List<Teacher> potentialTeachers = subjectToTeacherMap.getOrDefault(subject, Collections.emptyList());
+                        if (potentialTeachers.isEmpty()) continue;
+
+                        Teacher availableTeacher = null;
+                        Collections.shuffle(potentialTeachers);
+                        for (Teacher teacher : potentialTeachers) {
+                            int currentDailySlots = dailyLoad.getOrDefault(teacher, 0);
+                            if (!busyTeachersThisSlot.contains(teacher) && currentDailySlots < maxSlotsPerTeacherPerDay) {
+                                availableTeacher = teacher;
+                                break;
+                            }
+                        }
+
+                        if (availableTeacher != null) {
+                            LocalTime slotEnd = slotStart.plusMinutes(slotMinutes);
+                            if (slotEnd.isAfter(workEnd)) slotEnd = workEnd; // Ensure slot doesn't exceed workEnd
+
+                            timetable.add(new TimetableEntry(day, slotStart, slotEnd, semester, subject, availableTeacher));
+                            busyTeachersThisSlot.add(availableTeacher);
+                            scheduledSlotsMap.put(currentSubjectContext, scheduled + 1);
+
+                            recentSubjects.addLast(subject);
+                            if (maxConsecutiveSlotsPerSubject > 0 && recentSubjects.size() > maxConsecutiveSlotsPerSubject) {
+                                recentSubjects.removeFirst();
+                            }
+
+                            dailyLoad.put(availableTeacher, dailyLoad.getOrDefault(availableTeacher, 0) + 1);
+                            slotFilledForThisSem = true;
+                            break;
+                        }
                     } // End subject loop
-                    if (!slotFilledForThisSem) { recentSubjects.addLast(null); if (recentSubjects.size() > 2) recentSubjects.removeFirst(); } // Update recent even if slot empty
+
+                    if (!slotFilledForThisSem) {
+                        recentSubjects.addLast(null);
+                        if (maxConsecutiveSlotsPerSubject > 0 && recentSubjects.size() > maxConsecutiveSlotsPerSubject) {
+                            recentSubjects.removeFirst();
+                        }
+                    }
                 } // End semester loop
             } // End slot loop
         } // End day loop
-        printUnmetNeeds(requiredSlotsMap, scheduledSlotsMap); printTeacherLoad(teacherDailyLoadMap); System.out.println("DEBUG: Finished Algorithm V2."); return timetable;
-    }
 
+        printUnmetNeeds(requiredSlotsMap, scheduledSlotsMap);
+        printTeacherLoad(teacherDailyLoadMap);
+        System.out.println("DEBUG: Finished Algorithm V2.");
+        return timetable;
+    }
     /** Helper to print subjects that didn't meet required hours */
     private void printUnmetNeeds(Map<SubjectContext, Integer> required, Map<SubjectContext, Integer> scheduled) {
         // (Logic unchanged)
@@ -748,7 +1341,7 @@ public class ClassMesh extends Application {
             // Add class slot header
             LocalTime slotStart = classSlots.get(i);
             LocalTime slotEnd = slotStart.plusMinutes(slotDurationMinutes);
-            String headerText = slotStart.format(TIME_FORMATTER) + "-\n" + slotEnd.format(TIME_FORMATTER);
+            String headerText = slotStart.format(TIME_FORMATTER) +" - "+ slotEnd.format(TIME_FORMATTER);
             Label timeHeader = createHeaderLabel(headerText, 11);
             GridPane.setHgrow(timeHeader, Priority.ALWAYS);
             timetableDisplayGrid.add(timeHeader, currentHeaderCol++, 0);
@@ -820,6 +1413,8 @@ public class ClassMesh extends Application {
         } // End day loop
 
         // --- Column Constraints ---
+
+
         timetableDisplayGrid.getColumnConstraints().clear();
         ColumnConstraints colDaySem = new ColumnConstraints(); colDaySem.setPrefWidth(120); colDaySem.setMinWidth(100); colDaySem.setHgrow(Priority.NEVER);
         timetableDisplayGrid.getColumnConstraints().add(colDaySem); // Column 0
@@ -892,70 +1487,211 @@ public class ClassMesh extends Application {
 
     // --- Export Methods ---
 
-    /** Handles Export to Excel action */
     private void handleExportExcel() {
-        if (lastGeneratedTimetable == null || lastGeneratedTimetable.isEmpty()) { showInfoAlert("Export Info", "No timetable data available to export."); return; }
-        FileChooser fileChooser = new FileChooser(); fileChooser.setTitle("Save Timetable as Excel"); fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel Workbook (*.xlsx)", "*.xlsx")); fileChooser.setInitialFileName("timetable.xlsx"); File file = fileChooser.showSaveDialog(mainTabPane.getScene().getWindow());
+        if (lastGeneratedTimetable == null || lastGeneratedTimetable.isEmpty()) {
+            showInfoAlert("Export Info", "No timetable data available to export.");
+            return;
+        }
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Save Timetable as Excel");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel Workbook (*.xlsx)", "*.xlsx"));
+        fileChooser.setInitialFileName("timetable.xlsx");
+        File file = fileChooser.showSaveDialog(mainTabPane.getScene().getWindow());
         if (file == null) return;
+
+        String currentSchoolName = schoolNameField.getText().trim();
+        String currentDepartmentName = departmentNameField.getText().trim();
 
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Timetable");
-            // --- Populate Excel Sheet (Mirroring displayTimetableGrid) ---
+
+            // --- Step 1: Calculate and DEBUG classSlots ---
             List<LocalTime> classSlots = calculateTimeSlots(workStartTime, workEndTime, breakStartTime, breakEndTime, slotDurationMinutes);
-            if (classSlots.isEmpty()) { showErrorAlert("Export Error", "No valid class time slots found for export."); return; }
+            System.out.println("DEBUG EXCEL EXPORT: workStartTime=" + workStartTime + ", workEndTime=" + workEndTime +
+                    ", breakStartTime=" + breakStartTime + ", breakEndTime=" + this.breakEndTime + // Use instance variable if that's what you mean
+                    ", slotDurationMinutes=" + slotDurationMinutes);
+            System.out.println("DEBUG EXCEL EXPORT: Calculated classSlots for Excel: " + classSlots);
+            System.out.println("DEBUG EXCEL EXPORT: Number of classSlots: " + classSlots.size());
 
-            // Determine break column index
-            int breakColumnIndex = -1;
-            for (int i = 0; i < classSlots.size(); i++) { if (!classSlots.get(i).isBefore(breakStartTime)) { breakColumnIndex = i + 1; break; } }
-            if (breakColumnIndex == -1 && breakStartTime != null && !breakStartTime.isAfter(workEndTime)) { breakColumnIndex = classSlots.size() + 1; }
+            if (classSlots.isEmpty()) {
+                showErrorAlert("Export Error", "No valid class time slots found for export. Check time configurations.");
+                return;
+            }
 
-            // Styles
+            // --- Step 2: Determine break column index (1-based for Excel columns) ---
+            int breakColumnIndex = -1; // -1 means no break column
+            if (breakStartTime != null) { // Only if a break start time is defined
+                for (int i = 0; i < classSlots.size(); i++) {
+                    if (!classSlots.get(i).isBefore(breakStartTime)) {
+                        breakColumnIndex = i + 1; // +1 because Day/Sem is col 0, slots start effectively at col 1 from excelCol perspective
+                        break;
+                    }
+                }
+                if (breakColumnIndex == -1 && workEndTime != null && !breakStartTime.isAfter(workEndTime)) { // Break is after all class slots but within work time
+                    breakColumnIndex = classSlots.size() + 1;
+                }
+            }
+
+            // --- Step 3: Define Styles ---
             CellStyle headerStyle = createExcelHeaderStyle(workbook);
             CellStyle dayHeaderStyle = createExcelDayHeaderStyle(workbook);
             CellStyle semesterHeaderStyle = createExcelSemesterHeaderStyle(workbook);
             CellStyle breakStyle = createExcelBreakStyle(workbook);
             CellStyle entryStyle = createExcelEntryStyle(workbook);
             CellStyle emptyStyle = createExcelEmptyStyle(workbook);
+            // Define title styles if you haven't already (example)
+            CellStyle titleStyle = workbook.createCellStyle(); // from createExcelHeaderStyle(workbook);
+            org.apache.poi.ss.usermodel.Font titleFont = workbook.createFont(); // from createExcelHeaderStyle(workbook);
+            titleFont.setBold(true); titleFont.setFontHeightInPoints((short) 14); titleStyle.setFont(titleFont);
+            titleStyle.setAlignment(HorizontalAlignment.CENTER); titleStyle.setVerticalAlignment(CENTER);
 
-            // Header Row
-            Row headerRow = sheet.createRow(0);
-            Cell topLeftCell = headerRow.createCell(0); topLeftCell.setCellValue("Day / Sem"); topLeftCell.setCellStyle(headerStyle);
-            int excelCol = 1;
-            for (int i = 0; i < classSlots.size(); i++) {
-                if (excelCol == breakColumnIndex) { Cell cell = headerRow.createCell(excelCol++); cell.setCellValue("BREAK"); cell.setCellStyle(headerStyle); }
-                LocalTime slotStart = classSlots.get(i); LocalTime slotEnd = slotStart.plusMinutes(slotDurationMinutes); Cell cell = headerRow.createCell(excelCol++); cell.setCellValue(slotStart.format(TIME_FORMATTER) + "-" + slotEnd.format(TIME_FORMATTER)); cell.setCellStyle(headerStyle);
+            CellStyle subTitleStyle = workbook.createCellStyle(); // from createExcelHeaderStyle(workbook);
+            org.apache.poi.ss.usermodel.Font subTitleFont = workbook.createFont(); // from createExcelHeaderStyle(workbook);
+            subTitleFont.setFontHeightInPoints((short) 12); subTitleStyle.setFont(subTitleFont);
+            subTitleStyle.setAlignment(HorizontalAlignment.CENTER); subTitleStyle.setVerticalAlignment(CENTER);
+
+
+            // --- Step 4: Manage Row Indexing and Add Titles ---
+            int currentRowNum = 0; // Current row index for sheet.createRow()
+
+            // Calculate the number of columns the actual timetable grid will use.
+            // This is 1 (for Day/Sem) + number of classSlots + (1 if a break column is added).
+            int numTimetableGridColumns = 1 + classSlots.size();
+            if (breakColumnIndex != -1) { // If a break column will be inserted
+                numTimetableGridColumns++;
             }
-            if (breakColumnIndex == classSlots.size() + 1) { Cell cell = headerRow.createCell(excelCol++); cell.setCellValue("BREAK"); cell.setCellStyle(headerStyle); }
-            int totalExcelCols = excelCol;
 
-            // Data Rows
-            int excelRow = 1;
+            if (!currentSchoolName.isEmpty()) {
+                Row schoolNameRow = sheet.createRow(currentRowNum++);
+                Cell schoolCell = schoolNameRow.createCell(0);
+                schoolCell.setCellValue(currentSchoolName);
+                schoolCell.setCellStyle(titleStyle); // Apply your title style
+                if (numTimetableGridColumns > 1) {
+                    sheet.addMergedRegion(new CellRangeAddress(schoolNameRow.getRowNum(), schoolNameRow.getRowNum(), 0, numTimetableGridColumns - 1));
+                }
+                schoolNameRow.setHeightInPoints(20);
+            }
+
+            if (!currentDepartmentName.isEmpty()) {
+                Row deptNameRow = sheet.createRow(currentRowNum++);
+                Cell deptCell = deptNameRow.createCell(0);
+                deptCell.setCellValue(currentDepartmentName);
+                deptCell.setCellStyle(subTitleStyle); // Apply your subtitle style
+                if (numTimetableGridColumns > 1) {
+                    sheet.addMergedRegion(new CellRangeAddress(deptNameRow.getRowNum(), deptNameRow.getRowNum(), 0, numTimetableGridColumns - 1));
+                }
+                deptNameRow.setHeightInPoints(18);
+            }
+
+            if (!currentSchoolName.isEmpty() || !currentDepartmentName.isEmpty()) {
+                currentRowNum++; // Add a spacer row
+            }
+
+            // --- Step 5: Create Timetable Header Row ---
+            Row timetableHeaderRow = sheet.createRow(currentRowNum++); // Use current row number
+            Cell topLeftCell = timetableHeaderRow.createCell(0);
+            topLeftCell.setCellValue("Day / Sem");
+            topLeftCell.setCellStyle(headerStyle);
+
+            int currentExcelCol = 1; // For columns after "Day / Sem"
+            for (int i = 0; i < classSlots.size(); i++) {
+                // Check if this is the position for the break column header
+                if (breakColumnIndex != -1 && currentExcelCol == breakColumnIndex) {
+                    Cell cell = timetableHeaderRow.createCell(currentExcelCol++);
+                    cell.setCellValue("BREAK");
+                    cell.setCellStyle(headerStyle); // Or a specific break header style
+                }
+                // Add the class slot header
+                LocalTime slotStart = classSlots.get(i);
+                LocalTime slotEnd = slotStart.plusMinutes(slotDurationMinutes);
+                Cell cell = timetableHeaderRow.createCell(currentExcelCol++);
+                cell.setCellValue(slotStart.format(TIME_FORMATTER) + "-" + slotEnd.format(TIME_FORMATTER));
+                cell.setCellStyle(headerStyle);
+            }
+            // If break is the very last column (after all class slots)
+            if (breakColumnIndex != -1 && breakColumnIndex == classSlots.size() + 1) {
+                Cell cell = timetableHeaderRow.createCell(currentExcelCol++);
+                cell.setCellValue("BREAK");
+                cell.setCellStyle(headerStyle); // Or a specific break header style
+            }
+            // int totalExcelColsPopulated = currentExcelCol; // This is now the count of populated columns (1-based next index)
+
+            // --- Step 6: Populate Data Rows ---
             List<Semester> sortedSemesters = semesterList.stream().sorted(Comparator.comparing(Semester::getName)).collect(Collectors.toList());
-            Map<String, Map<Semester, Map<LocalTime, TimetableEntry>>> groupedEntries = lastGeneratedTimetable.stream().collect(Collectors.groupingBy(TimetableEntry::getDay, Collectors.groupingBy(TimetableEntry::getSemester, Collectors.toMap(TimetableEntry::getStartTime, entry -> entry, (e1, e2) -> e1))));
+            Map<String, Map<Semester, Map<LocalTime, TimetableEntry>>> groupedEntries = lastGeneratedTimetable.stream()
+                    .collect(Collectors.groupingBy(TimetableEntry::getDay,
+                            Collectors.groupingBy(TimetableEntry::getSemester,
+                                    Collectors.toMap(TimetableEntry::getStartTime, entry -> entry, (e1, e2) -> e1))));
 
             for (String day : WORKING_DAYS) {
-                Row dayRow = sheet.createRow(excelRow++); Cell dayCell = dayRow.createCell(0); dayCell.setCellValue(day); dayCell.setCellStyle(dayHeaderStyle);
-                sheet.addMergedRegion(new CellRangeAddress(excelRow - 1, excelRow - 1, 0, totalExcelCols - 1)); // Merge day cell
+                Row dayRow = sheet.createRow(currentRowNum++);
+                Cell dayCell = dayRow.createCell(0);
+                dayCell.setCellValue(day);
+                dayCell.setCellStyle(dayHeaderStyle);
+                // Merge the day cell across the width of the timetable grid
+                if (numTimetableGridColumns > 1) {
+                    sheet.addMergedRegion(new CellRangeAddress(dayRow.getRowNum(), dayRow.getRowNum(), 0, numTimetableGridColumns - 1));
+                }
+
 
                 for (Semester semester : sortedSemesters) {
-                    Row semRow = sheet.createRow(excelRow++); Cell semCell = semRow.createCell(0); semCell.setCellValue(semester.getName()); semCell.setCellStyle(semesterHeaderStyle);
-                    Map<LocalTime, TimetableEntry> semesterDayEntries = groupedEntries.getOrDefault(day, Collections.emptyMap()).getOrDefault(semester, Collections.emptyMap());
-                    excelCol = 1;
+                    Row semRow = sheet.createRow(currentRowNum++);
+                    Cell semCell = semRow.createCell(0);
+                    semCell.setCellValue(semester.getName());
+                    semCell.setCellStyle(semesterHeaderStyle);
+
+                    Map<LocalTime, TimetableEntry> semesterDayEntries = groupedEntries.getOrDefault(day, Collections.emptyMap())
+                            .getOrDefault(semester, Collections.emptyMap());
+
+                    currentExcelCol = 1; // Reset for each semester row
                     for (int i = 0; i < classSlots.size(); i++) {
-                        if (excelCol == breakColumnIndex) { Cell cell = semRow.createCell(excelCol++); cell.setCellValue("BREAK"); cell.setCellStyle(breakStyle); }
-                        LocalTime slotStart = classSlots.get(i); Cell cell = semRow.createCell(excelCol++); TimetableEntry entry = semesterDayEntries.get(slotStart); if (entry != null) { cell.setCellValue(entry.getSubject().getName() + "\n(" + entry.getTeacher().getName() + ")"); cell.setCellStyle(entryStyle); } else { cell.setCellStyle(emptyStyle); }
+                        if (breakColumnIndex != -1 && currentExcelCol == breakColumnIndex) {
+                            Cell cell = semRow.createCell(currentExcelCol++);
+                            cell.setCellValue("BREAK");
+                            cell.setCellStyle(breakStyle);
+                        }
+                        LocalTime slotStart = classSlots.get(i);
+                        Cell cell = semRow.createCell(currentExcelCol++);
+                        TimetableEntry entry = semesterDayEntries.get(slotStart);
+                        if (entry != null) {
+                            cell.setCellValue(entry.getSubject().getName() + "\n(" + entry.getTeacher().getName() + ")");
+                            cell.setCellStyle(entryStyle);
+                        } else {
+                            cell.setCellStyle(emptyStyle); // Just apply style for empty cells
+                        }
                     }
-                    if (breakColumnIndex == classSlots.size() + 1) { Cell cell = semRow.createCell(excelCol++); cell.setCellValue("BREAK"); cell.setCellStyle(breakStyle); }
+                    if (breakColumnIndex != -1 && breakColumnIndex == classSlots.size() + 1) {
+                        Cell cell = semRow.createCell(currentExcelCol++);
+                        cell.setCellValue("BREAK");
+                        cell.setCellStyle(breakStyle);
+                    }
                 }
             }
 
-            // Auto-size columns (adjust as needed)
-            for (int i = 0; i < totalExcelCols; i++) { sheet.autoSizeColumn(i); }
-            sheet.setColumnWidth(0, 30 * 256); // Wider first column
+            // --- Step 7: Auto-size columns ---
+            // Use numTimetableGridColumns as it represents the actual number of columns in the timetable grid.
+            for (int i = 0; i < numTimetableGridColumns; i++) {
+                sheet.autoSizeColumn(i);
+            }
+            // Ensure Day/Sem column is wide enough if autoSize is not perfect
+            if (numTimetableGridColumns > 0) {
+                sheet.setColumnWidth(0, 30 * 256); // Wider first column
+            }
 
-            try (FileOutputStream fileOut = new FileOutputStream(file)) { workbook.write(fileOut); showInfoAlert("Export Successful", "Timetable exported to:\n" + file.getName()); }
-        } catch (IOException e) { System.err.println("Error exporting to Excel: " + e.getMessage()); e.printStackTrace(); showErrorAlert("Export Error", "Could not export timetable to Excel.\nError: " + e.getMessage()); }
-        catch (Exception e) { System.err.println("Unexpected error during Excel export: " + e.getMessage()); e.printStackTrace(); showErrorAlert("Export Error", "An unexpected error occurred during Excel export."); }
+
+            try (FileOutputStream fileOut = new FileOutputStream(file)) {
+                workbook.write(fileOut);
+                showInfoAlert("Export Successful", "Timetable exported to:\n" + file.getName());
+            }
+        } catch (IOException e) {
+            System.err.println("Error exporting to Excel: " + e.getMessage());
+            e.printStackTrace();
+            showErrorAlert("Export Error", "Could not export timetable to Excel.\nError: " + e.getMessage());
+        } catch (Exception e) {
+            System.err.println("Unexpected error during Excel export: " + e.getMessage());
+            e.printStackTrace();
+            showErrorAlert("Export Error", "An unexpected error occurred during Excel export.");
+        }
     }
     /**
      * Handles Export to PDF action
@@ -965,6 +1701,10 @@ public class ClassMesh extends Application {
             showInfoAlert("Export Info", "No timetable data available to export.");
             return;
         }
+
+        String currentSchoolName = schoolNameField.getText().trim();
+        String currentDepartmentName = departmentNameField.getText().trim();
+
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save Timetable as PDF");
         fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF Document (*.pdf)", "*.pdf"));
@@ -981,7 +1721,24 @@ public class ClassMesh extends Application {
             // Use Landscape for potentially wide timetables
             Document document = new Document(pdf, PageSize.A4.rotate());
             document.setMargins(20, 20, 20, 20); // Top, Right, Bottom, Left
+            // --- ADDED: Add School/Department Name to PDF Document ---
+            if (!currentSchoolName.isEmpty()) {
+                Paragraph schoolP = new Paragraph(currentSchoolName)
+                        .setFont(PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD))
+                        .setFontSize(16)
+                        .setTextAlignment(TextAlignment.CENTER)
+                        .setMarginBottom(5); // Space below school name
+                document.add(schoolP);
+            }
 
+            if (!currentDepartmentName.isEmpty()) {
+                Paragraph deptP = new Paragraph(currentDepartmentName)
+                        .setFont(PdfFontFactory.createFont(StandardFonts.HELVETICA))
+                        .setFontSize(14)
+                        .setTextAlignment(TextAlignment.CENTER)
+                        .setMarginBottom(10); // Space below department name, before table
+                document.add(deptP);
+            }
             // --- Create PDF Table ---
             Table pdfTable = createPdfTimetableTable(lastGeneratedTimetable);
             document.add(pdfTable);
@@ -1016,41 +1773,348 @@ public class ClassMesh extends Application {
 
     // --- Load/Save Placeholders (Adapted) ---
     /** Handles Load Configuration action - Reads raw JSON data and enables Generate button. */
+    // In createMenuBar():
+// loadItem.setOnAction(e -> handleLoadConfiguration(stage)); // Uncomment this
+
+// New or modified handleLoadConfiguration method:
     private void handleLoadConfiguration(Stage stage) {
-        FileChooser fileChooser = new FileChooser(); fileChooser.setTitle("Load Configuration File"); fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Files", "*.json")); File file = fileChooser.showOpenDialog(stage);
-        if (file != null) { try { loadedJsonData = Files.readString(Paths.get(file.getAbsolutePath())); configLoadedFromFile = true; System.out.println("Successfully loaded configuration file: " + file.getAbsolutePath()); generateButton.setDisable(false); hideTimeConfigSection(); hideSemesterSection(); hideTeacherSection(); showInfoAlert("Load Configuration", "Configuration data loaded.\nGenerate Timetable button is now enabled.\n(UI not updated with loaded values)"); } catch (IOException e) { System.err.println("Error reading configuration file: " + e.getMessage()); showErrorAlert("Load Error", "Error reading configuration file:\n" + e.getMessage()); resetLoadedState(); } catch (Exception e) { System.err.println("An unexpected error occurred during file load: " + e.getMessage()); showErrorAlert("Load Error", "An unexpected error occurred during file load."); resetLoadedState(); } }
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Load Configuration File");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Files (*.json)", "*.json"));
+        File file = fileChooser.showOpenDialog(stage);
+
+        if (file != null) {
+            try {
+                ObjectMapper objectMapper = new ObjectMapper();
+                AppConfiguration loadedConfig = objectMapper.readValue(file, AppConfiguration.class);
+
+                // --- Clear existing state ---
+                resetUIAndDataToDefaults(); // You'll need a helper method for this
+
+                // --- Populate UI and internal state from loadedConfig ---
+                schoolNameField.setText(loadedConfig.schoolName);
+                departmentNameField.setText(loadedConfig.departmentName);
+
+                // Time Configuration
+                if (loadedConfig.timeSettings != null) {
+                    workStartTimeCombo.setValue(loadedConfig.timeSettings.workStart());
+                    workEndTimeCombo.setValue(loadedConfig.timeSettings.workEnd());
+                    breakStartTimeCombo.setValue(loadedConfig.timeSettings.breakStart());
+                    breakEndTimeCombo.setValue(loadedConfig.timeSettings.breakEnd());
+                    slotDurationCombo.setValue(loadedConfig.timeSettings.slotDuration());
+                    maxTeacherSlotsSpinner.getValueFactory().setValue(loadedConfig.timeSettings.maxTeacherSlots());
+                }
+                if (loadedConfig.maxConsecutiveSlotsPerSubject != null) {
+                    maxConsecutiveSubjectSpinner.getValueFactory().setValue(loadedConfig.maxConsecutiveSlotsPerSubject);
+                }
+                updateWorkingHoursDisplay(); // Recalculate and display derived values
+                // Simulate "Next" click for time config to enable semester section if times are valid
+                if (validateAndStoreTimeConfig()) { // This also stores values internally
+                    showSemesterSection();
+                } else {
+                    showErrorAlert("Load Warning", "Loaded time configuration is invalid. Please review.");
+                    // Decide how to proceed - maybe stop loading or let user fix
+                }
+
+
+                // Semester Configuration
+                if (loadedConfig.semesterConfigurations != null && !loadedConfig.semesterConfigurations.isEmpty()) {
+                    semCountComboBox.setValue(loadedConfig.semesterConfigurations.size()); // This triggers buildSemesterSubjectGrid
+
+                    // buildSemesterSubjectGrid will create the basic structure.
+                    // We need to wait for it and then populate the values.
+                    // This part is tricky due to UI updates. Platform.runLater might be needed.
+                    Platform.runLater(() -> {
+                        populateSemesterGridFromConfig(loadedConfig.semesterConfigurations);
+                        // After semesters are loaded, their subjects are known.
+                        // We can now populate allSubjectsObservableList, which is needed for teacher assignment.
+                        // This logic should be similar to what handleSemesterNextClick does after validation.
+                        semesterList.clear(); // Clear before repopulating from loaded config
+                        allSubjectsObservableList.clear();
+
+                        for (SemesterConfigData semConfig : loadedConfig.semesterConfigurations) {
+                            Semester semester = new Semester(semConfig.name());
+                            for (SubjectDetailConfig subConfig : semConfig.subjects()) {
+                                Subject subject = new Subject(subConfig.name(), subConfig.hours());
+                                semester.getSubjects().add(subject);
+                                allSubjectsObservableList.add(new SubjectContext(subject, semester));
+                            }
+                            semesterList.add(semester);
+                        }
+                        allSubjectsObservableList.sort(Comparator.comparing((SubjectContext sc) -> sc.getSubject().getName()).thenComparing(sc -> sc.getSemester().getName()));
+
+
+                        // Teacher Configuration (should run after semesters are fully processed and allSubjectsObservableList is ready)
+                        if (loadedConfig.teacherConfigurations != null && !loadedConfig.teacherConfigurations.isEmpty()) {
+                            showTeacherSection(); // Make sure it's visible
+                            teacherCountComboBox.setValue(loadedConfig.teacherConfigurations.size()); // Triggers populateTeacherMappingGrid
+
+                            Platform.runLater(() -> { // Another Platform.runLater might be needed for teacher grid population
+                                populateTeacherGridFromConfig(loadedConfig.teacherConfigurations);
+                                checkIfReadyToGenerate(); // Enable generate button if everything is valid
+                            });
+                        } else {
+                            hideTeacherSection();
+                        }
+                    });
+                } else {
+                    hideSemesterSection();
+                    hideTeacherSection();
+                }
+
+
+                showInfoAlert("Load Configuration", "Configuration loaded successfully from:\n" + file.getName() + "\nPlease review the loaded settings.");
+                configLoadedFromFile = true; // Your existing flag
+                // generateButton.setDisable(false); // This should be handled by checkIfReadyToGenerate()
+
+            } catch (IOException e) {
+                System.err.println("Error loading configuration file: " + e.getMessage());
+                e.printStackTrace();
+                showErrorAlert("Load Error", "Error loading configuration file:\n" + e.getMessage());
+            } catch (Exception e) {
+                System.err.println("An unexpected error occurred during configuration load: " + e.getMessage());
+                e.printStackTrace();
+                showErrorAlert("Load Error", "An unexpected error occurred during configuration load.");
+            }
+        }
     }
-    /** Resets the loaded configuration state */
-    private void resetLoadedState() { loadedJsonData = null; configLoadedFromFile = false; generateButton.setDisable(true); }
-    /** Handles Save Configuration action - Gathers data from UI and Writes manually constructed JSON to file. */
+
+    // Helper method to reset UI (you'll need to expand this)
+    private void resetUIAndDataToDefaults() {
+        schoolNameField.clear();
+        departmentNameField.clear();
+
+        // Reset time combos to defaults or clear them
+        workStartTimeCombo.setValue("10:00"); // Or some initial default
+        workEndTimeCombo.setValue("16:00");
+        // ... and so on for other time fields, spinners
+
+        semCountComboBox.setValue(null); // This should clear the semester grid
+        semesterSubjectGrid.getChildren().clear();
+        semesterList.clear();
+
+        teacherCountComboBox.setValue(null);
+        teacherMappingGrid.getChildren().clear();
+        teacherList.clear();
+        allSubjectsObservableList.clear();
+        globallySelectedSubjectContexts.clear();
+
+        hideSemesterSection();
+        hideTeacherSection();
+        hideGenerateButton();
+        disableExportButtons();
+        timetableDisplayGrid.getChildren().clear();
+        generatedScrollPane.setContent(new Label("Please provide input configuration first.")); // Reset timetable tab
+        if (mainTabPane.getSelectionModel().getSelectedItem() == generatedTimetableTab) {
+            mainTabPane.getSelectionModel().selectFirst(); // Switch to input tab
+        }
+        lastGeneratedTimetable = null;
+        // --- State for Loaded Configuration ---
+        String loadedJsonData = null;
+        configLoadedFromFile = false;
+    }
+
+
+    // Helper to populate semester grid from loaded config
+    private void populateSemesterGridFromConfig(List<SemesterConfigData> semesterConfigurations) {
+        for (int i = 0; i < semesterConfigurations.size(); i++) {
+            SemesterConfigData semConfig = semesterConfigurations.get(i);
+            TextField semNameField = (TextField) findNodeInGrid(semesterSubjectGrid, i, 0);
+            VBox subjectInputArea = (VBox) findNodeInGrid(semesterSubjectGrid, i, 1);
+
+            if (semNameField != null) semNameField.setText(semConfig.name());
+
+            if (subjectInputArea != null) {
+                ComboBox<Integer> subCountCombo = null;
+                FlowPane subDetailPane = null;
+                for(Node n : subjectInputArea.getChildren()){
+                    if(n instanceof ComboBox) subCountCombo = (ComboBox<Integer>) n;
+                    else if (n instanceof FlowPane) subDetailPane = (FlowPane) n;
+                }
+
+                if (subCountCombo != null) {
+                    subCountCombo.setValue(semConfig.subjects().size()); // This triggers creation of subject rows in subDetailPane
+
+                    // Now populate the dynamically created subject rows
+                    final FlowPane finalSubDetailPane = subDetailPane; // For use in runLater
+                    final List<SubjectDetailConfig> finalSubjectDetails = semConfig.subjects();
+                    Platform.runLater(()-> { // Ensure UI elements are ready
+                        if (finalSubDetailPane != null && finalSubDetailPane.getChildren().size() == finalSubjectDetails.size()) {
+                            for (int j = 0; j < finalSubjectDetails.size(); j++) {
+                                SubjectDetailConfig subDetail = finalSubjectDetails.get(j);
+                                Node entryBoxNode = finalSubDetailPane.getChildren().get(j);
+                                if (entryBoxNode instanceof HBox) {
+                                    TextField subNameNode = null;
+                                    Spinner<Integer> hoursSpinnerNode = null;
+                                    for (Node item : ((HBox) entryBoxNode).getChildrenUnmodifiable()) {
+                                        if (item instanceof TextField) subNameNode = (TextField) item;
+                                        else if (item instanceof Spinner) hoursSpinnerNode = (Spinner<Integer>) item;
+                                    }
+                                    if (subNameNode != null) subNameNode.setText(subDetail.name());
+                                    if (hoursSpinnerNode != null) hoursSpinnerNode.getValueFactory().setValue(subDetail.hours());
+                                }
+                            }
+                        } else {
+                            System.err.println("Load warning: Mismatch in subject detail pane structure for semester " + semConfig.name());
+                        }
+                    });
+                }
+            }
+        }
+    }
+
+    // Helper to populate teacher grid from loaded config
+    private void populateTeacherGridFromConfig(List<TeacherConfigData> teacherConfigurations) {
+        for (int i = 0; i < teacherConfigurations.size(); i++) {
+            TeacherConfigData teacherConfig = teacherConfigurations.get(i);
+            TextField teachNameField = (TextField) findNodeInGrid(teacherMappingGrid, i, 0);
+            VBox teacherInputsVBox = (VBox) findNodeInGrid(teacherMappingGrid, i, 1);
+
+            if (teachNameField != null) teachNameField.setText(teacherConfig.name());
+
+            if (teacherInputsVBox != null) {
+                ComboBox<Integer> subTeachCountCombo = null;
+                FlowPane tSubMapFlowPane = null;
+                for(Node n : teacherInputsVBox.getChildren()){
+                    if(n instanceof ComboBox) subTeachCountCombo = (ComboBox<Integer>) n;
+                    else if (n instanceof FlowPane) tSubMapFlowPane = (FlowPane) n;
+                }
+
+                if (subTeachCountCombo != null) {
+                    subTeachCountCombo.setValue(teacherConfig.assignedSubjects().size()); // Triggers creation of subject ComboBoxes
+
+                    final FlowPane finalTSubMapFlowPane = tSubMapFlowPane;
+                    final List<TeacherAssignmentConfig> finalAssignments = teacherConfig.assignedSubjects();
+                    Platform.runLater(() -> { // Ensure UI elements (subject ComboBoxes) are ready
+                        if (finalTSubMapFlowPane != null && finalTSubMapFlowPane.getChildren().size() == finalAssignments.size()) {
+                            for (int j = 0; j < finalAssignments.size(); j++) {
+                                TeacherAssignmentConfig assignment = finalAssignments.get(j);
+                                Node cbNode = finalTSubMapFlowPane.getChildren().get(j);
+                                if (cbNode instanceof ComboBox) {
+                                    @SuppressWarnings("unchecked")
+                                    ComboBox<SubjectContext> subjectSelectCombo = (ComboBox<SubjectContext>) cbNode;
+                                    // Find the matching SubjectContext from allSubjectsObservableList
+                                    Optional<SubjectContext> contextToSelect = allSubjectsObservableList.stream()
+                                            .filter(sc -> sc.getSubject().getName().equals(assignment.subjectName()) &&
+                                                    sc.getSemester().getName().equals(assignment.semesterName()))
+                                            .findFirst();
+                                    contextToSelect.ifPresent(subjectSelectCombo::setValue);
+                                }
+                            }
+                        } else {
+                            System.err.println("Load warning: Mismatch in teacher subject assignment structure for " + teacherConfig.name());
+                        }
+                    });
+                }
+            }
+        }
+    }
+    // In createMenuBar():
+// saveItem.setOnAction(e -> handleSaveConfiguration(stage)); // Uncomment this
+
+    // New or modified handleSaveConfiguration method:
     private void handleSaveConfiguration(Stage stage) {
-        System.out.println("--- Gathering Configuration for Save ---");
-        List<SemesterConfig> semesters = gatherSemesterDataFromUI(); List<TeacherConfig> teachers = gatherTeacherDataFromUI(); TimeConfiguration timeConfig = gatherTimeConfigDataFromUI();
-        if (semesters.isEmpty() || teachers.isEmpty() || timeConfig == null) { showErrorAlert("Save Error", "Cannot save - incomplete configuration data gathered from UI. Please ensure all steps are filled and validated."); return; }
-        Map<String, Object> fullConfig = new LinkedHashMap<>(); fullConfig.put("semesters", semesters.stream().map(SemesterConfig::toMap).collect(Collectors.toList())); fullConfig.put("teachers", teachers.stream().map(TeacherConfig::toMap).collect(Collectors.toList())); fullConfig.put("timeSettings", timeConfig.toMap());
-        String jsonOutput = convertMapToJson(fullConfig); // Use manual JSON writer
-        FileChooser fileChooser = new FileChooser(); fileChooser.setTitle("Save Configuration File"); fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Files", "*.json")); fileChooser.setInitialFileName("classmesh_config.json");
+        AppConfiguration currentConfig = new AppConfiguration();
+
+        // 1. Gather Data from UI and internal state
+        currentConfig.schoolName = schoolNameField.getText();
+        currentConfig.departmentName = departmentNameField.getText();
+
+        // Time settings
+        String ws = workStartTimeCombo.getValue();
+        String we = workEndTimeCombo.getValue();
+        String bs = breakStartTimeCombo.getValue();
+        String be = breakEndTimeCombo.getValue();
+        Integer sd = slotDurationCombo.getValue();
+        Integer mts = maxTeacherSlotsSpinner.getValue();
+        currentConfig.maxConsecutiveSlotsPerSubject = maxConsecutiveSubjectSpinner.getValue();
+
+
+        if (ws == null || we == null || bs == null || be == null || sd == null || mts == null || currentConfig.maxConsecutiveSlotsPerSubject == null) {
+            showErrorAlert("Save Error", "Cannot save - incomplete time configuration data. Please ensure all time settings are filled.");
+            return;
+        }
+        currentConfig.timeSettings = new TimeConfiguration(ws, we, bs, be, sd, mts); // Assuming your TimeConfiguration record
+
+        // Semester Configurations
+        currentConfig.semesterConfigurations = new ArrayList<>();
+        // Iterate through your semesterSubjectGrid or the semesterList if it's reliably populated by this point
+        // For simplicity, let's assume semesterList and their subjects are correctly populated
+        // This requires that handleSemesterNextClick successfully populated semesterList.
+        if (semesterList.isEmpty() && semCountComboBox.getValue() != null && semCountComboBox.getValue() > 0) {
+            showErrorAlert("Save Error", "Semester data not fully processed. Please click 'Next' in the semester section first.");
+            return;
+        }
+        for (Semester sem : semesterList) {
+            List<SubjectDetailConfig> subjectDetails = sem.getSubjects().stream()
+                    .map(sub -> new SubjectDetailConfig(sub.getName(), sub.getWeeklyHours()))
+                    .collect(Collectors.toList());
+            currentConfig.semesterConfigurations.add(new SemesterConfigData(sem.getName(), subjectDetails));
+        }
+
+        // Teacher Configurations
+        currentConfig.teacherConfigurations = new ArrayList<>();
+        // This is more complex as you need to get data from the teacherMappingGrid
+        Integer expectedTeacherCount = teacherCountComboBox.getValue();
+        if (expectedTeacherCount == null || expectedTeacherCount <= 0) {
+            // No teachers to save, or not configured yet. Decide if this is an error or just save empty.
+        } else {
+            for (int i = 0; i < expectedTeacherCount; i++) {
+                TextField teachNameField = (TextField) findNodeInGrid(teacherMappingGrid, i, 0);
+                VBox teacherInputsVBox = (VBox) findNodeInGrid(teacherMappingGrid, i, 1);
+                if (teachNameField == null || teacherInputsVBox == null) continue; // Should not happen if UI is consistent
+
+                String teacherName = teachNameField.getText();
+                if (teacherName.trim().isEmpty()) continue; // Skip unnamed teachers
+
+                List<TeacherAssignmentConfig> assignments = new ArrayList<>();
+                FlowPane tSubMapFlowPane = null;
+                for(Node n : teacherInputsVBox.getChildren()){
+                    if(n instanceof FlowPane) tSubMapFlowPane = (FlowPane) n;
+                }
+
+                if (tSubMapFlowPane != null) {
+                    for (Node cbNode : tSubMapFlowPane.getChildren()) {
+                        if (cbNode instanceof ComboBox) {
+                            @SuppressWarnings("unchecked")
+                            ComboBox<SubjectContext> subjectSelectCombo = (ComboBox<SubjectContext>) cbNode;
+                            SubjectContext selected = subjectSelectCombo.getValue();
+                            if (selected != null) {
+                                assignments.add(new TeacherAssignmentConfig(selected.getSubject().getName(), selected.getSemester().getName()));
+                            }
+                        }
+                    }
+                }
+                currentConfig.teacherConfigurations.add(new TeacherConfigData(teacherName, assignments));
+            }
+        }
+
+
+        // 2. Choose File
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Save Configuration File");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Files (*.json)", "*.json"));
+        fileChooser.setInitialFileName("classmesh_config.json");
         File file = fileChooser.showSaveDialog(stage);
-        if (file != null) { String filePath = file.getAbsolutePath(); if (!filePath.toLowerCase().endsWith(".json")) file = new File(filePath + ".json"); System.out.println("Save configuration to: " + file.getAbsolutePath()); try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) { writer.write(jsonOutput); showInfoAlert("Save Configuration", "Configuration saved successfully to:\n" + file.getName()); } catch (IOException e) { System.err.println("Error saving configuration file: " + e.getMessage()); showErrorAlert("Save Error","Error saving configuration file:\n" + e.getMessage()); } }
+
+        if (file != null) {
+            try {
+                ObjectMapper objectMapper = new ObjectMapper();
+                // Make the JSON output human-readable (pretty print)
+                objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
+                objectMapper.writeValue(file, currentConfig);
+                showInfoAlert("Save Configuration", "Configuration saved successfully to:\n" + file.getName());
+            } catch (IOException e) {
+                System.err.println("Error saving configuration file: " + e.getMessage());
+                e.printStackTrace();
+                showErrorAlert("Save Error", "Error saving configuration file:\n" + e.getMessage());
+            }
+        }
     }
-    // --- Adapted Data Gathering for Save ---
-    private List<SemesterConfig> gatherSemesterDataFromUI() {
-        List<SemesterConfig> semesters = new ArrayList<>();
-        if (semesterList != null && !semesterList.isEmpty()) { for(Semester sem : semesterList) { List<SubjectDetail> details = sem.getSubjects().stream().map(sub -> new SubjectDetail(sub.getName(), sub.getWeeklyHours())).collect(Collectors.toList()); semesters.add(new SemesterConfig(sem.getName(), details)); } }
-        else { System.err.println("Save Warning: Semester list empty, cannot gather semester data for save."); } return semesters;
-    }
-    private List<TeacherConfig> gatherTeacherDataFromUI() {
-        List<TeacherConfig> teachers = new ArrayList<>();
-        if (teacherList != null && !teacherList.isEmpty()){ for(Teacher teacher : teacherList) { List<TeacherAssignment> assignments = new ArrayList<>(); int teacherIndex = teacherList.indexOf(teacher); FlowPane currentTeacherSubFlow = null; VBox teacherInputsVBox = (VBox) findNodeInGrid(teacherMappingGrid, teacherIndex, 1); if(teacherInputsVBox != null) { for(Node n : teacherInputsVBox.getChildren()){ if(n instanceof FlowPane) currentTeacherSubFlow = (FlowPane) n;} } if (currentTeacherSubFlow != null) { for (Node subSelectNode : currentTeacherSubFlow.getChildren()) { if (subSelectNode instanceof ComboBox) { @SuppressWarnings("unchecked") ComboBox<SubjectContext> subjectSelectCombo = (ComboBox<SubjectContext>) subSelectNode; SubjectContext selected = subjectSelectCombo.getValue(); if (selected != null) { assignments.add(new TeacherAssignment(selected.getSubject().getName(), selected.getSemester().getName())); } } } } else { System.err.println("Save Warning: Could not find subject selection UI for teacher " + teacher.getName()); } teachers.add(new TeacherConfig(teacher.getName(), assignments)); } }
-        else { System.err.println("Save Warning: Teacher list empty, cannot gather teacher data for save."); } return teachers;
-    }
-    private TimeConfiguration gatherTimeConfigDataFromUI() { String ws = workStartTimeCombo != null ? workStartTimeCombo.getValue() : null; String we = workEndTimeCombo != null ? workEndTimeCombo.getValue() : null; String bs = breakStartTimeCombo != null ? breakStartTimeCombo.getValue() : null; String be = breakEndTimeCombo != null ? breakEndTimeCombo.getValue() : null; Integer sd = slotDurationCombo != null ? slotDurationCombo.getValue() : null; Integer mts = maxTeacherSlotsSpinner != null ? maxTeacherSlotsSpinner.getValue() : null; // Get max teacher slots
-        if (ws == null || we == null || bs == null || be == null || sd == null || mts == null) return null; // Check mts
-        return new TimeConfiguration(ws, we, bs, be, sd, mts); // Add mts
-    }
-    /**
-     * Helper method to create the iText Table for PDF export
+//    /**
+     /* Helper method to create the iText Table for PDF export
      */
+
     private Table createPdfTimetableTable(List<TimetableEntry> timetable) throws IOException {
         // Ensure you have this method available or copy it if needed:
         List<LocalTime> classSlots = calculateTimeSlots(workStartTime, workEndTime, breakStartTime, breakEndTime, slotDurationMinutes);
@@ -1125,7 +2189,7 @@ public class ClassMesh extends Application {
             // Add class slot header
             LocalTime slotStart = classSlots.get(i);
             LocalTime slotEnd = slotStart.plusMinutes(slotDurationMinutes);
-            String headerText = slotStart.format(TIME_FORMATTER) + "-\n" + slotEnd.format(TIME_FORMATTER);
+            String headerText = slotStart.format(TIME_FORMATTER) + " - " + slotEnd.format(TIME_FORMATTER);
             com.itextpdf.layout.element.Cell timeHeaderCell = new com.itextpdf.layout.element.Cell()
                     .add(new Paragraph(headerText).setFont(boldFont).setFontSize(headerFontSize))
                     .setTextAlignment(TextAlignment.CENTER)
@@ -1336,6 +2400,8 @@ public class ClassMesh extends Application {
         loadStageIcon(alertStage);
 
         aboutAlert.showAndWait();
+
+
     }
     // --- Manual JSON Conversion Helpers ---
     private String convertMapToJson(Map<String, Object> map) { return convertMapToJson(map, 1); }
@@ -1344,6 +2410,82 @@ public class ClassMesh extends Application {
     private String convertToJsonValue(Object value, int indent) { if (value == null) return "null"; else if (value instanceof String) return escapeJsonString((String) value); else if (value instanceof Number || value instanceof Boolean) return value.toString(); else if (value instanceof Map) return convertMapToJson((Map<String, Object>) value, indent); else if (value instanceof List) return convertListToJson((List<?>) value, indent); else return escapeJsonString(value.toString()); }
     private String escapeJsonString(String input) { if (input == null) return "null"; StringBuilder sb = new StringBuilder(); sb.append('"'); for (char c : input.toCharArray()) { switch (c) { case '"': sb.append("\\\""); break; case '\\': sb.append("\\\\"); break; case '\b': sb.append("\\b"); break; case '\f': sb.append("\\f"); break; case '\n': sb.append("\\n"); break; case '\r': sb.append("\\r"); break; case '\t': sb.append("\\t"); break; default: sb.append(c); } } sb.append('"'); return sb.toString(); }
     // --- End JSON Helpers ---
+
+    private List<String> getCurrentMacAddresses() {
+        List<String> macAddressList = new ArrayList<>();
+        try {
+            Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
+            while (networkInterfaces.hasMoreElements()) {
+                NetworkInterface ni = networkInterfaces.nextElement();
+                if (ni.isLoopback() || ni.isVirtual() || !ni.isUp()) {
+                    continue;
+                }
+                byte[] hardwareAddress = ni.getHardwareAddress();
+                if (hardwareAddress != null) {
+                    StringBuilder macBuilder = new StringBuilder();
+                    for (int i = 0; i < hardwareAddress.length; i++) {
+                        macBuilder.append(String.format("%02X%s", hardwareAddress[i], (i < hardwareAddress.length - 1) ? "-" : ""));
+                    }
+                    macAddressList.add(macBuilder.toString());
+                }
+            }
+        } catch (SocketException e) {
+            System.err.println("Security Check: Could not retrieve MAC address. " + e.getMessage());
+            // Optionally, show an error to the user here or log more extensively
+            // For simplicity, we'll return an empty list, which will cause the check to fail
+            // if ALLOWED_MAC_ADDRESS is not "none" or something.
+        }
+        return macAddressList;
+    }
+
+    /**
+     * Checks if the application is allowed to run on the current machine
+     * based on its MAC address.
+     * @return true if allowed, false otherwise.
+     */
+    private boolean isOperationAllowed() {
+        if (ALLOWED_MAC_ADDRESS == null || ALLOWED_MAC_ADDRESS.trim().isEmpty() || "XX-XX-XX-XX-XX-XX".equalsIgnoreCase(ALLOWED_MAC_ADDRESS)) {
+            // Fallback for placeholder or unconfigured MAC - you might want to make this stricter
+            System.out.println("Security Warning: Allowed MAC Address is not configured or is a placeholder. Allowing execution for development.");
+
+            List<String> currentMacs = getCurrentMacAddresses();
+            if (currentMacs.isEmpty()) {
+                System.out.println("Security Check: No MAC addresses found on this system.");
+            } else {
+                System.out.println("Security Check: Current system MAC Addresses: " + currentMacs);
+            }
+            System.out.println("Security Check: Please configure a valid ALLOWED_MAC_ADDRESS in the code.");
+            // For the purpose of this example, if the default placeholder is still there, we'll print MACs and allow.
+            // Change this to `return false;` for a production build with a real MAC.
+            if ("XX-XX-XX-XX-XX-XX".equalsIgnoreCase(ALLOWED_MAC_ADDRESS)) {
+                showErrorAlert("MAC Address Not Configured",
+                        "The application's allowed MAC address is not configured.\n\n" +
+                                "Current system MACs: " + currentMacs + "\n\n" +
+                                "Please contact support or the developer.");
+                return false; // More secure default for unconfigured
+            }
+            return true; // Or handle as an error
+        }
+
+        List<String> currentMacs = getCurrentMacAddresses();
+        if (currentMacs.isEmpty()) {
+            System.err.println("Security Check: Failed to retrieve any MAC addresses from this system.");
+            return false;
+        }
+
+        System.out.println("Security Check: Verifying against Allowed MAC: " + ALLOWED_MAC_ADDRESS);
+        System.out.println("Security Check: Current system MAC Addresses: " + currentMacs);
+
+        for (String currentMac : currentMacs) {
+            if (ALLOWED_MAC_ADDRESS.equalsIgnoreCase(currentMac)) {
+                System.out.println("Security Check: MAC Address match found. Application allowed.");
+                return true;
+            }
+        }
+
+        System.err.println("Security Check: MAC Address mismatch. Application not allowed on this device.");
+        return false;
+    }
 
     // --- Main Method ---
     public static void main(String[] args) {
