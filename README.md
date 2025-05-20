@@ -2,7 +2,6 @@
 - 👀 I’m interested in Tech
 - 🌱 I’m currently learning everything , coding , whatever keeps me pumped.
 - 💞️ I’m looking to collaborate on ...
-- 📫 How to reach me ...
 - 😄 Pronouns: He
 - ⚡ Fun fact: I love creating new things
 
