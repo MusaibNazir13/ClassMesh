@@ -1,11 +1,7 @@
-- 👋 Hi, I’m @MusaibNazir13
-- 👀 I’m interested in Tech
-- 🌱 I’m currently learning everything , coding , whatever keeps me pumped.
-- 💞️ I’m looking to collaborate on ...
-- 😄 Pronouns: He
-- ⚡ Fun fact: I love creating new things
+- 👋 Hi, I’m Musaib Nazir
 
-<!---
-MusaibNazir13/MusaibNazir13 is a ✨ special ✨ repository because its `README.md` (this file) appears on your GitHub profile.
-You can click the Preview link to take a look at your changes.
---->
+- This Time Table Generation System was created by myself as major project in my college while pursuing 3 Year Computer Engineering Diploma.
+- The whole system working logic was entirely built by me. JavaFx , Java , Json Programming was built by me with help of gemini AI.
+- This Time Table generation system takes Time configuration (Start Time , End Time, Break start time and end break time, duration of class / per slot ), Number of working Sems/Classes in an Institute / Department,  Based on that number new Sem / Class detail slots will appear, on each Sem / Class input there will be Subject Count on each each class , based on subject count subject Name input fields will appear, Each Subject field has Name and Class Hours per subject per week, and  Clicking on next Button will show Teacher Subject Mapping Section, 1st it will ask for number of Teachers , based on number Teacher Input fields will appear , on right of each teacher section will be , number of subjects the teacher will teach, and now there will be dropdowns based on the number and once subject is selected it disappears from the dropdown list , making it easier to not assign subjects to multiple teachers by mistake , subject from two classes / sems with same name will be Automatically treated as different subjects, Even one letter in subject changes it will be treated as separate subject.
+- After this once User hits Generate time table , It will be generated for the whole week.
+- Generated time table will be out of teacher clashes , and teacher consecutives will be maintained as well as per configuration after time config section. 
