@@ -1,3 +1,4 @@
+# ClassMesh - Automatic ClashFree TimeTable Generation System
 - 👋 Hi, I’m Musaib Nazir
 
 - This Time Table Generation System was created by myself as major project in my college while pursuing 3 Year Computer Engineering Diploma.
