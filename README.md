@@ -8,4 +8,4 @@
 - 
 # ClassMesh Interactive Flowchart
 **View the full interactive flowchart here:**  
-👉https://musaibnazir13.github.io/ClassMesh-Flowchart
+👉https://musaibnazir13.github.io/ClassMesh
